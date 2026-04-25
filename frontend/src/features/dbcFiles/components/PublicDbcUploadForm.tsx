@@ -80,23 +80,28 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
     <Paper
       elevation={0}
       sx={{
-        p: { xs: 3, md: 4 },
-        border: '1px solid rgba(0, 105, 92, 0.12)',
+        p: { xs: 2, md: 2.5 },
         boxShadow: '0 28px 70px rgba(0, 77, 64, 0.14)',
       }}
     >
-      <Stack spacing={3}>
+      <Stack spacing={1.5}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-          <Chip color="primary" icon={<CloudUploadRoundedIcon />} label="Öffentlicher Upload" sx={{ fontWeight: 700 }} />
-          <Chip label="Nur .dbc" variant="outlined" sx={{ borderColor: 'rgba(0, 105, 92, 0.24)' }} />
+          <Chip
+            color="primary"
+            icon={<CloudUploadRoundedIcon />}
+            label="Öffentlicher Upload"
+            size="small"
+            sx={{ fontWeight: 700 }}
+          />
+          <Chip label="Nur .dbc" size="small" variant="outlined" sx={{ borderColor: 'rgba(0, 105, 92, 0.24)' }} />
         </Stack>
 
         <Box>
-          <Typography variant="h5" gutterBottom>
+          <Typography variant="h6" gutterBottom>
             DBC-Datei hochladen
           </Typography>
-          <Typography color="text.secondary">
-            Die Datei wird direkt an das Backend gesendet und dort in der Datenbank gespeichert.
+          <Typography variant="body2" color="text.secondary">
+            Kompakt per Drag-and-Drop oder Dateiauswahl. Die Datei wird direkt im Backend gespeichert.
           </Typography>
         </Box>
 
@@ -107,35 +112,57 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           sx={{
-            position: 'relative',
-            borderRadius: 6,
+            borderRadius: 4,
             border: isDragging ? '2px solid' : '1px dashed rgba(0, 105, 92, 0.28)',
             borderColor: isDragging ? 'primary.main' : 'rgba(0, 105, 92, 0.28)',
             bgcolor: isDragging ? 'rgba(77, 182, 172, 0.08)' : 'rgba(255, 250, 244, 0.7)',
             transition: 'all 180ms ease',
+            cursor: 'pointer',
           }}
+          onClick={() => fileInputRef.current?.click()}
         >
-          <Stack spacing={2} sx={{ p: { xs: 3, md: 4 }, alignItems: 'center', textAlign: 'center' }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'auto minmax(0, 1fr) auto auto' },
+              gap: 1.5,
+              alignItems: 'center',
+              p: { xs: 1.5, md: 1.75 },
+            }}
+          >
             <Box
               sx={{
-                width: 72,
-                height: 72,
-                borderRadius: '24px',
+                width: 42,
+                height: 42,
+                borderRadius: '14px',
                 display: 'grid',
                 placeItems: 'center',
                 bgcolor: 'rgba(0, 105, 92, 0.12)',
                 color: 'primary.main',
+                mx: { xs: 'auto', md: 0 },
               }}
             >
-              <DescriptionRoundedIcon sx={{ fontSize: 34 }} />
+              <DescriptionRoundedIcon sx={{ fontSize: 22 }} />
             </Box>
 
-            <Stack spacing={1} sx={{ alignItems: 'center' }}>
-              <Typography variant="h6">Datei ablegen oder manuell auswählen</Typography>
-              <Typography color="text.secondary" sx={{ maxWidth: 420 }}>
-                Es werden nur Dateien mit der Endung {acceptedExtension} akzeptiert.
+            <Box sx={{ minWidth: 0, textAlign: { xs: 'center', md: 'left' } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                {selectedFile ? selectedFile.name : 'Datei ablegen oder auswählen'}
               </Typography>
-            </Stack>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: selectedFile ? 'nowrap' : 'normal',
+                }}
+              >
+                {selectedFile
+                  ? `Bereit zum Upload · ${formatFileSize(selectedFile.size)}`
+                  : `Drag-and-Drop oder Klick · akzeptiert nur ${acceptedExtension}`}
+              </Typography>
+            </Box>
 
             <input
               ref={fileInputRef}
@@ -145,46 +172,60 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
               onChange={handleInputChange}
             />
 
-            <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={(event) => {
+                event.stopPropagation()
+                fileInputRef.current?.click()
+              }}
+              sx={{
+                minWidth: 130,
+              }}
+            >
               Datei wählen
             </Button>
 
-            <Stack
-              direction="row"
-              spacing={1}
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={
+                uploadMutation.isPending ? (
+                  <CircularProgress color="inherit" size={16} />
+                ) : (
+                  <CloudUploadRoundedIcon />
+                )
+              }
+              disabled={uploadMutation.isPending || !selectedFile}
+              onClick={(event) => {
+                event.stopPropagation()
+                void handleUpload()
+              }}
               sx={{
-                width: '100%',
-                maxWidth: 460,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 4,
-                px: 2,
-                py: 1.5,
-                bgcolor: 'rgba(0, 77, 64, 0.06)',
-                color: 'text.secondary',
+                minWidth: 150,
               }}
             >
-              <InsertDriveFileRoundedIcon fontSize="small" />
-              <Typography sx={{ fontSize: '0.95rem' }}>{selectedFileLabel}</Typography>
-            </Stack>
-          </Stack>
+              {uploadMutation.isPending ? 'Upload läuft...' : 'Jetzt hochladen'}
+            </Button>
+          </Box>
         </Box>
 
-        <Button
-          size="large"
-          variant="contained"
-          startIcon={
-            uploadMutation.isPending ? (
-              <CircularProgress color="inherit" size={18} />
-            ) : (
-              <CloudUploadRoundedIcon />
-            )
-          }
-          disabled={uploadMutation.isPending || !selectedFile}
-          onClick={handleUpload}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            color: 'text.secondary',
+          }}
         >
-          {uploadMutation.isPending ? 'Upload läuft...' : 'Jetzt hochladen'}
-        </Button>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <InsertDriveFileRoundedIcon fontSize="small" />
+            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedFileLabel}
+            </Typography>
+          </Stack>
+          <Typography variant="caption">Formateinschränkung: nur {acceptedExtension}</Typography>
+        </Stack>
 
         {uploadMutation.data ? (
           <Alert

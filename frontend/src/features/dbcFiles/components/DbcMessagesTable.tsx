@@ -16,8 +16,14 @@ type DbcMessagesTableProps = {
 
 export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessage }: DbcMessagesTableProps) {
   return (
-    <TableContainer>
-      <Table size="small">
+    <TableContainer
+      sx={{
+        maxHeight: { xs: 360, md: 520 },
+        overflow: 'auto',
+        borderRadius: 0,
+      }}
+    >
+      <Table size="small" stickyHeader>
         <TableHead>
           <TableRow>
             <TableCell>ID</TableCell>

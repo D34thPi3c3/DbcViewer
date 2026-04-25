@@ -32,8 +32,15 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
   }
 
   return (
-    <TableContainer key={`${message.frameId}:${message.name}`}>
-      <Table size="small">
+    <TableContainer
+      key={`${message.frameId}:${message.name}`}
+      sx={{
+        maxHeight: { xs: 420, md: 520 },
+        overflow: 'auto',
+        borderRadius: 0,
+      }}
+    >
+      <Table size="small" stickyHeader>
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>

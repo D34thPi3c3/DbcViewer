@@ -34,7 +34,7 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
         </Typography>
       </Stack>
 
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={3}>
+      <Stack spacing={3}>
         <DefinitionTableCard
           title="Nachrichten"
           description="Wähle eine Nachricht aus, um die zugehörigen Signale zu sehen."

@@ -50,9 +50,8 @@ export function PublicUploadPage() {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: { xs: 1, md: 1.5 },
+                    p: { xs: 0.5, md: 0.75 },
                     borderRadius: 6,
-                    border: '1px solid rgba(0, 105, 92, 0.12)',
                     bgcolor: 'rgba(255, 250, 244, 0.52)',
                     backdropFilter: 'blur(10px)',
                   }}
