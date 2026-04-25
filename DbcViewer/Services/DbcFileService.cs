@@ -3,6 +3,7 @@ using DbcViewer.Entities;
 using DbcViewer.Extensions;
 using DbcViewer.Services.Results;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 
 namespace DbcViewer.Services;
 
@@ -40,6 +41,43 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         {
             File = dbcFile.ToResponse()
         };
+    }
+
+    public async Task<GetDbcDefinitionResult> GetDefinitionAsync(
+        Guid fileId,
+        CancellationToken cancellationToken = default)
+    {
+        var dbcFile = await dbContext.DbcFiles
+            .AsNoTracking()
+            .SingleOrDefaultAsync(file => file.Id == fileId, cancellationToken);
+
+        if (dbcFile is null)
+        {
+            return new GetDbcDefinitionResult
+            {
+                NotFound = true
+            };
+        }
+
+        try
+        {
+            var messages = DbcDefinitionParser.Parse(dbcFile.Content);
+
+            return new GetDbcDefinitionResult
+            {
+                Definition = dbcFile.ToDefinitionResponse(messages)
+            };
+        }
+        catch (FormatException)
+        {
+            return new GetDbcDefinitionResult
+            {
+                Errors = new Dictionary<string, string[]>
+                {
+                    ["file"] = ["The stored DBC file could not be parsed into messages and signals."]
+                }
+            };
+        }
     }
 
     private static Dictionary<string, string[]> Validate(IFormFile? file)

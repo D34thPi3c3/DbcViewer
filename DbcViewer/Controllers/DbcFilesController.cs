@@ -23,4 +23,24 @@ public sealed class DbcFilesController(IDbcFileService dbcFileService) : Control
 
         return Ok(result.File);
     }
+
+    [HttpGet("{fileId:guid}/definition")]
+    public async Task<ActionResult<DbcDefinitionResponse>> GetDefinition(
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
+        var result = await dbcFileService.GetDefinitionAsync(fileId, cancellationToken);
+
+        if (result.NotFound)
+        {
+            return NotFound();
+        }
+
+        if (!result.Succeeded)
+        {
+            return ValidationProblem(new ValidationProblemDetails(result.Errors));
+        }
+
+        return Ok(result.Definition);
+    }
 }

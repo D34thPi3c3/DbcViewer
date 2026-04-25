@@ -61,6 +61,108 @@ public sealed class DbcFileServiceTests
         Assert.Empty(dbContext.DbcFiles);
     }
 
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsParsedMessagesAndSignals()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var dbcContent = """
+                         VERSION "1.0"
+
+                         BO_ 256 VehicleStatus: 8 Vector__XXX
+                          SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX,Dashboard
+                          SG_ EngineSpeed : 16|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+                         """;
+
+        dbContext.DbcFiles.Add(new Entities.DbcFile
+        {
+            OriginalFileName = "vehicle.dbc",
+            ContentType = "application/octet-stream",
+            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
+            Content = Encoding.UTF8.GetBytes(dbcContent),
+            UploadedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+
+        // Act
+        var result = await service.GetDefinitionAsync(fileId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Definition);
+        Assert.Equal(fileId, result.Definition!.FileId);
+        Assert.Single(result.Definition.Messages);
+
+        var message = result.Definition.Messages[0];
+        Assert.Equal((uint)256, message.FrameId);
+        Assert.Equal("VehicleStatus", message.Name);
+        Assert.Equal((ushort)8, message.LengthInBytes);
+        Assert.Equal("Vector__XXX", message.Transmitter);
+        Assert.Equal(2, message.Signals.Count);
+
+        var firstSignal = message.Signals[0];
+        Assert.Equal("VehicleSpeed", firstSignal.Name);
+        Assert.Null(firstSignal.MultiplexerIndicator);
+        Assert.Equal(0, firstSignal.StartBit);
+        Assert.Equal(16, firstSignal.BitLength);
+        Assert.Equal("little-endian", firstSignal.ByteOrder);
+        Assert.Equal("unsigned", firstSignal.ValueType);
+        Assert.Equal(0.1d, firstSignal.Factor);
+        Assert.Equal(0d, firstSignal.Offset);
+        Assert.Equal(0d, firstSignal.Minimum);
+        Assert.Equal(250d, firstSignal.Maximum);
+        Assert.Equal("km/h", firstSignal.Unit);
+        Assert.Equal(["Vector__XXX", "Dashboard"], firstSignal.Receivers);
+    }
+
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsNotFound_WhenFileDoesNotExist()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+
+        // Act
+        var result = await service.GetDefinitionAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.True(result.NotFound);
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Definition);
+    }
+
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsError_WhenStoredContentCannotBeParsed()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+
+        dbContext.DbcFiles.Add(new Entities.DbcFile
+        {
+            OriginalFileName = "invalid.dbc",
+            ContentType = "application/octet-stream",
+            SizeInBytes = 12,
+            Content = Encoding.UTF8.GetBytes("not a dbc file"),
+            UploadedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+
+        // Act
+        var result = await service.GetDefinitionAsync(fileId);
+
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.False(result.NotFound);
+        Assert.Null(result.Definition);
+        Assert.Contains("file", result.Errors.Keys);
+    }
+
     private static AppDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
