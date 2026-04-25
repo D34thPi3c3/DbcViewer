@@ -1,0 +1,29 @@
+@DbcViewer_HostAddress = http://localhost:5016
+@Token = paste-jwt-here
+
+POST {{DbcViewer_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "email": "admin@example.com",
+  "password": "SuperSecret123"
+}
+
+###
+
+POST {{DbcViewer_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "admin",
+  "password": "SuperSecret123"
+}
+
+###
+
+GET {{DbcViewer_HostAddress}}/api/auth/me
+Authorization: Bearer {{Token}}
+Accept: application/json
+
+###

@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dbcviewer-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dbcviewer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbcviewer-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  dbcviewer-postgres-data:
