@@ -1,45 +1,28 @@
+import { useQuery } from '@tanstack/react-query'
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded'
-import PublicRoundedIcon from '@mui/icons-material/PublicRounded'
-import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
-import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded'
 import {
   Alert,
   Box,
   Container,
   Grid,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   Paper,
   Stack,
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
 import { AppMenuBar } from '../components/AppMenuBar'
+import { getDbcDefinition } from '../features/dbcFiles/api/getDbcDefinition'
+import { DbcDefinitionTables } from '../features/dbcFiles/components/DbcDefinitionTables'
 import { PublicDbcUploadForm } from '../features/dbcFiles/components/PublicDbcUploadForm'
 import type { DbcFileResponse } from '../types/dbcFiles'
 
-const highlights = [
-  {
-    icon: <PublicRoundedIcon color="primary" />,
-    title: 'Ohne Login erreichbar',
-    description: 'Die Startseite ist öffentlich und eignet sich als einfacher Eingang für DBC-Uploads.',
-  },
-  {
-    icon: <UploadFileRoundedIcon color="primary" />,
-    title: 'Direkter Datei-Upload',
-    description: 'Auswahl per Dateidialog oder Drag-and-Drop, danach geht die Datei direkt an die API.',
-  },
-  {
-    icon: <StorageRoundedIcon color="primary" />,
-    title: 'Persistenz im Backend',
-    description: 'Die API speichert den Inhalt der DBC-Datei zusammen mit Metadaten in PostgreSQL.',
-  },
-]
-
 export function PublicUploadPage() {
   const [uploadedFile, setUploadedFile] = useState<DbcFileResponse | null>(null)
+  const definitionQuery = useQuery({
+    queryKey: ['dbc-definition', uploadedFile?.id],
+    queryFn: () => getDbcDefinition(uploadedFile!.id),
+    enabled: uploadedFile !== null,
+  })
 
   return (
     <Box
@@ -53,59 +36,62 @@ export function PublicUploadPage() {
       <AppMenuBar />
 
       <Container maxWidth="lg">
-        <Grid container spacing={4} sx={{ alignItems: 'stretch', pt: { xs: 4, md: 6 } }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Stack spacing={3} sx={{ height: '100%', justifyContent: 'center' }}>
-              <Box>
-                <Typography variant="h2" sx={{ mt: 1, maxWidth: 560 }}>
-                  Öffentliche Upload-Seite für DBC-Dateien.
-                </Typography>
-                <Typography sx={{ mt: 2, maxWidth: 560, color: 'text.secondary', fontSize: '1.05rem' }}>
-                  Diese Seite ist bewusst auf den ersten Schritt optimiert: Datei abgeben,
-                  Upload bestätigen, später im Viewer weiterverarbeiten.
-                </Typography>
-              </Box>
+        <Stack spacing={4} sx={{ pt: { xs: 4, md: 6 } }}>
+          <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
+            <Grid size={{ xs: 12 }}>
+              <Stack spacing={3}>
+                {uploadedFile ? (
+                  <Alert severity="info" icon={<CloudUploadRoundedIcon fontSize="inherit" />} sx={{ borderRadius: 4 }}>
+                    Letzter Upload: <strong>{uploadedFile.fileName}</strong> am{' '}
+                    <strong>{new Date(uploadedFile.uploadedAtUtc).toLocaleString('de-CH')}</strong>.
+                  </Alert>
+                ) : null}
 
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 3,
-                  borderRadius: 6,
-                  border: '1px solid rgba(0, 105, 92, 0.12)',
-                  bgcolor: 'rgba(255, 250, 244, 0.78)',
-                  backdropFilter: 'blur(10px)',
-                }}
-              >
-                <List disablePadding>
-                  {highlights.map((highlight) => (
-                    <ListItem key={highlight.title} disableGutters sx={{ alignItems: 'flex-start', py: 1.25 }}>
-                      <ListItemIcon sx={{ minWidth: 44 }}>{highlight.icon}</ListItemIcon>
-                      <ListItemText
-                        primary={<Typography sx={{ fontWeight: 700 }}>{highlight.title}</Typography>}
-                        secondary={
-                          <Typography component="span" color="text.secondary">
-                            {highlight.description}
-                          </Typography>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: { xs: 1, md: 1.5 },
+                    borderRadius: 6,
+                    border: '1px solid rgba(0, 105, 92, 0.12)',
+                    bgcolor: 'rgba(255, 250, 244, 0.52)',
+                    backdropFilter: 'blur(10px)',
+                  }}
+                >
+                  <PublicDbcUploadForm onSuccess={setUploadedFile} />
+                </Paper>
+              </Stack>
+            </Grid>
+          </Grid>
 
-              {uploadedFile ? (
-                <Alert severity="info" icon={<CloudUploadRoundedIcon fontSize="inherit" />} sx={{ borderRadius: 4 }}>
-                  Letzter Upload: <strong>{uploadedFile.fileName}</strong> am{' '}
-                  <strong>{new Date(uploadedFile.uploadedAtUtc).toLocaleString('de-CH')}</strong>.
+          {uploadedFile ? (
+            <Stack spacing={3}>
+              {definitionQuery.isPending ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    borderRadius: 6,
+                    border: '1px solid rgba(0, 105, 92, 0.12)',
+                    bgcolor: 'rgba(255, 250, 244, 0.82)',
+                  }}
+                >
+                  <Typography variant="h5">DBC-Struktur wird geladen</Typography>
+                  <Typography color="text.secondary" sx={{ mt: 1 }}>
+                    Nachrichten und Signale werden aus dem Backend abgefragt.
+                  </Typography>
+                </Paper>
+              ) : null}
+
+              {definitionQuery.error ? (
+                <Alert severity="error" sx={{ borderRadius: 4 }}>
+                  {definitionQuery.error.message}
                 </Alert>
               ) : null}
-            </Stack>
-          </Grid>
 
-          <Grid size={{ xs: 12, md: 6 }}>
-            <PublicDbcUploadForm onSuccess={setUploadedFile} />
-          </Grid>
-        </Grid>
+              {definitionQuery.data ? <DbcDefinitionTables definition={definitionQuery.data} /> : null}
+            </Stack>
+          ) : null}
+        </Stack>
       </Container>
     </Box>
   )
