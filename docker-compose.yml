@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18.3
     container_name: dbcviewer-postgres
     restart: unless-stopped
     environment:
@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - dbcviewer-postgres-data:/var/lib/postgresql/data
+      - dbcviewer-postgres18-data:/var/lib/postgresql
 
 volumes:
-  dbcviewer-postgres-data:
+  dbcviewer-postgres18-data:
