@@ -91,6 +91,7 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IDbcFileService, DbcFileService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         return services;

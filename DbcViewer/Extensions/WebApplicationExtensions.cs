@@ -27,5 +27,16 @@ public static class WebApplicationExtensions
         await using var scope = app.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.EnsureCreatedAsync();
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS dbc_files (
+                "Id" uuid PRIMARY KEY,
+                "OriginalFileName" character varying(255) NOT NULL,
+                "ContentType" character varying(255) NOT NULL,
+                "SizeInBytes" bigint NOT NULL,
+                "Content" bytea NOT NULL,
+                "UploadedAtUtc" timestamp with time zone NOT NULL
+            );
+            """);
     }
 }

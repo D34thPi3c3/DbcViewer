@@ -22,6 +22,10 @@ import type { AuthResponse } from '../types/auth'
 
 type AuthMode = 'login' | 'register'
 
+type LoginPageProps = {
+  onNavigateToUpload: () => void
+}
+
 const highlights = [
   {
     icon: <StorageRoundedIcon color="primary" />,
@@ -40,7 +44,7 @@ const highlights = [
   },
 ]
 
-export function LoginPage() {
+export function LoginPage({ onNavigateToUpload }: LoginPageProps) {
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null)
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [lastCompletedMode, setLastCompletedMode] = useState<AuthMode | null>(null)
@@ -64,6 +68,14 @@ export function LoginPage() {
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={3} sx={{ height: '100%', justifyContent: 'center' }}>
               <Box>
+                <Button
+                  variant="text"
+                  color="inherit"
+                  onClick={onNavigateToUpload}
+                  sx={{ px: 0, minHeight: 'unset', mb: 1 }}
+                >
+                  Zur Upload-Seite
+                </Button>
                 <Typography
                   variant="overline"
                   sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.14em' }}
