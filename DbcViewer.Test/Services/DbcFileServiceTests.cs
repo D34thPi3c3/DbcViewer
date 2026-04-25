@@ -119,6 +119,53 @@ public sealed class DbcFileServiceTests
     }
 
     [Fact]
+    public async Task GetDefinitionAsync_AssignsSignalsOnlyToTheirOwnMessage()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var dbcContent = """
+                         VERSION "1.0"
+
+                         BO_ 256 VehicleStatus: 8 Vector__XXX
+                          SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+
+                         BO_ 300 EngineData: 8 Vector__XXX
+                          SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+                          SG_ OilTemp : 16|8@1+ (1,0) [0|200] "°C" Vector__XXX
+                         """;
+
+        dbContext.DbcFiles.Add(new Entities.DbcFile
+        {
+            OriginalFileName = "vehicle.dbc",
+            ContentType = "application/octet-stream",
+            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
+            Content = Encoding.UTF8.GetBytes(dbcContent),
+            UploadedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+
+        // Act
+        var result = await service.GetDefinitionAsync(fileId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Definition);
+        Assert.Equal(2, result.Definition!.Messages.Count);
+
+        var firstMessage = result.Definition.Messages[0];
+        var secondMessage = result.Definition.Messages[1];
+
+        Assert.Single(firstMessage.Signals);
+        Assert.Equal("VehicleSpeed", firstMessage.Signals[0].Name);
+
+        Assert.Equal(2, secondMessage.Signals.Count);
+        Assert.Equal(["EngineSpeed", "OilTemp"], secondMessage.Signals.Select(signal => signal.Name).ToArray());
+    }
+
+    [Fact]
     public async Task GetDefinitionAsync_ReturnsNotFound_WhenFileDoesNotExist()
     {
         // Arrange

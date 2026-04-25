@@ -34,6 +34,11 @@ internal static partial class DbcDefinitionParser
                 continue;
             }
 
+            if (!char.IsWhiteSpace(rawLine, 0))
+            {
+                currentMessage = null;
+            }
+
             var signalMatch = SignalLineRegex().Match(line);
             if (!signalMatch.Success || currentMessage is null)
             {

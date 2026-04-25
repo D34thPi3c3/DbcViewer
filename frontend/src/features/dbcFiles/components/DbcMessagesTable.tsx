@@ -10,11 +10,11 @@ import type { DbcMessageResponse } from '../../../types/dbcFiles'
 
 type DbcMessagesTableProps = {
   messages: DbcMessageResponse[]
-  selectedMessage: DbcMessageResponse | null
-  onSelectMessage: (message: DbcMessageResponse) => void
+  selectedMessageIndex: number
+  onSelectMessage: (index: number) => void
 }
 
-export function DbcMessagesTable({ messages, selectedMessage, onSelectMessage }: DbcMessagesTableProps) {
+export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessage }: DbcMessagesTableProps) {
   return (
     <TableContainer>
       <Table size="small">
@@ -28,15 +28,15 @@ export function DbcMessagesTable({ messages, selectedMessage, onSelectMessage }:
           </TableRow>
         </TableHead>
         <TableBody>
-          {messages.map((message) => {
-            const isSelected = getMessageKey(message) === getMessageKey(selectedMessage)
+          {messages.map((message, index) => {
+            const isSelected = index === selectedMessageIndex
 
             return (
               <TableRow
-                key={getMessageKey(message)}
+                key={`${message.frameId}:${message.name}:${index}`}
                 hover
                 selected={isSelected}
-                onClick={() => onSelectMessage(message)}
+                onClick={() => onSelectMessage(index)}
                 sx={{
                   cursor: 'pointer',
                   '& .MuiTableCell-root': {
@@ -56,14 +56,6 @@ export function DbcMessagesTable({ messages, selectedMessage, onSelectMessage }:
       </Table>
     </TableContainer>
   )
-}
-
-function getMessageKey(message: DbcMessageResponse | null | undefined) {
-  if (!message) {
-    return null
-  }
-
-  return `${message.frameId}:${message.name}`
 }
 
 function formatFrameId(frameId: number) {

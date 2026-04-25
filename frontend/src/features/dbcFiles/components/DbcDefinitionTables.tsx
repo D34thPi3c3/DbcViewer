@@ -2,7 +2,7 @@ import DatasetRoundedIcon from '@mui/icons-material/DatasetRounded'
 import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded'
 import { Chip, Stack, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
-import type { DbcDefinitionResponse, DbcMessageResponse } from '../../../types/dbcFiles'
+import type { DbcDefinitionResponse } from '../../../types/dbcFiles'
 import { DbcMessagesTable } from './DbcMessagesTable'
 import { DbcSignalsTable } from './DbcSignalsTable'
 import { DefinitionTableCard } from './DefinitionTableCard'
@@ -12,14 +12,13 @@ type DbcDefinitionTablesProps = {
 }
 
 export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
-  const [selectedMessageKey, setSelectedMessageKey] = useState<string | null>(null)
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState(0)
 
   useEffect(() => {
-    setSelectedMessageKey(getMessageKey(definition.messages[0]) ?? null)
+    setSelectedMessageIndex(0)
   }, [definition])
 
-  const selectedMessage =
-    definition.messages.find((message) => getMessageKey(message) === selectedMessageKey) ?? definition.messages[0] ?? null
+  const selectedMessage = definition.messages[selectedMessageIndex] ?? null
 
   return (
     <Stack spacing={3}>
@@ -42,8 +41,8 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
         >
           <DbcMessagesTable
             messages={definition.messages}
-            selectedMessage={selectedMessage}
-            onSelectMessage={(message) => setSelectedMessageKey(getMessageKey(message))}
+            selectedMessageIndex={selectedMessageIndex}
+            onSelectMessage={setSelectedMessageIndex}
           />
         </DefinitionTableCard>
 
@@ -60,14 +59,6 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
       </Stack>
     </Stack>
   )
-}
-
-function getMessageKey(message: DbcMessageResponse | null | undefined) {
-  if (!message) {
-    return null
-  }
-
-  return `${message.frameId}:${message.name}`
 }
 
 function formatFrameId(frameId: number) {
