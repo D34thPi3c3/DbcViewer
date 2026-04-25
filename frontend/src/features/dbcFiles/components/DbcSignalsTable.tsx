@@ -32,7 +32,7 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
   }
 
   return (
-    <TableContainer>
+    <TableContainer key={`${message.frameId}:${message.name}`}>
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -46,9 +46,9 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {message.signals.map((signal) => (
+          {message.signals.map((signal, index) => (
             <TableRow
-              key={`${message.frameId}-${signal.name}-${signal.startBit}`}
+              key={`${message.frameId}:${message.name}:${signal.name}:${signal.startBit}:${index}`}
               sx={{
                 '& .MuiTableCell-root': {
                   borderColor: 'rgba(0, 105, 92, 0.08)',
