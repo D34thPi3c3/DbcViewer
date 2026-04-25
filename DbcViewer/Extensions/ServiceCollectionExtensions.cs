@@ -3,6 +3,7 @@ using DbcViewer.Configuration;
 using DbcViewer.Data;
 using DbcViewer.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -57,11 +58,13 @@ public static class ServiceCollectionExtensions
         });
 
         services.Configure<JwtOptions>(jwtSection);
+        var configuredFrontendOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+
         services.AddCors(options =>
         {
             options.AddPolicy("frontend", policy =>
             {
-                policy.WithOrigins("http://localhost:5173")
+                ConfigureFrontendCorsPolicy(policy, configuredFrontendOrigins)
                     .AllowAnyHeader()
                     .AllowAnyMethod();
             });
@@ -104,5 +107,38 @@ public static class ServiceCollectionExtensions
         }
 
         return jwtOptions;
+    }
+
+    private static CorsPolicyBuilder ConfigureFrontendCorsPolicy(
+        CorsPolicyBuilder policy,
+        IReadOnlyCollection<string>? configuredOrigins)
+    {
+        var allowedOrigins = configuredOrigins?
+            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+            .Select(origin => origin.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return policy.SetIsOriginAllowed(origin =>
+        {
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (allowedOrigins?.Contains(origin) == true)
+            {
+                return true;
+            }
+
+            return uri.IsLoopback ||
+                   string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+        });
     }
 }

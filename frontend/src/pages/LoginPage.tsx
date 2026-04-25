@@ -4,6 +4,7 @@ import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
 import {
   Alert,
   Box,
+  Button,
   Container,
   Grid,
   List,
@@ -16,7 +17,10 @@ import {
 } from '@mui/material'
 import { useState } from 'react'
 import { LoginForm } from '../features/auth/components/LoginForm'
+import { RegisterForm } from '../features/auth/components/RegisterForm'
 import type { AuthResponse } from '../types/auth'
+
+type AuthMode = 'login' | 'register'
 
 const highlights = [
   {
@@ -38,6 +42,13 @@ const highlights = [
 
 export function LoginPage() {
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null)
+  const [authMode, setAuthMode] = useState<AuthMode>('login')
+  const [lastCompletedMode, setLastCompletedMode] = useState<AuthMode | null>(null)
+
+  function handleAuthSuccess(mode: AuthMode, response: AuthResponse) {
+    setAuthResult(response)
+    setLastCompletedMode(mode)
+  }
 
   return (
     <Box
@@ -99,11 +110,43 @@ export function LoginPage() {
 
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={2}>
-              <LoginForm onSuccess={setAuthResult} />
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1,
+                  borderRadius: 6,
+                  border: '1px solid rgba(0, 105, 92, 0.12)',
+                  bgcolor: 'rgba(255, 250, 244, 0.88)',
+                }}
+              >
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    fullWidth
+                    variant={authMode === 'login' ? 'contained' : 'text'}
+                    onClick={() => setAuthMode('login')}
+                  >
+                    Login
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant={authMode === 'register' ? 'contained' : 'text'}
+                    onClick={() => setAuthMode('register')}
+                  >
+                    Registrierung
+                  </Button>
+                </Stack>
+              </Paper>
+
+              {authMode === 'login' ? (
+                <LoginForm onSuccess={(response) => handleAuthSuccess('login', response)} />
+              ) : (
+                <RegisterForm onSuccess={(response) => handleAuthSuccess('register', response)} />
+              )}
 
               {authResult ? (
                 <Alert severity="success" sx={{ borderRadius: 4 }}>
-                  Eingeloggt als <strong>{authResult.user.username}</strong>. Das JWT wurde unter
+                  {lastCompletedMode === 'register' ? 'Konto erstellt' : 'Eingeloggt'} als{' '}
+                  <strong>{authResult.user.username}</strong>. Das JWT wurde unter
                   <strong> dbcviewer.auth </strong> im Browser gespeichert.
                 </Alert>
               ) : null}

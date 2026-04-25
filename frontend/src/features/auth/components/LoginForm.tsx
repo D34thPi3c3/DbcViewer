@@ -1,4 +1,5 @@
 import LoginRoundedIcon from '@mui/icons-material/LoginRounded'
+import { useMutation } from '@tanstack/react-query'
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded'
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded'
@@ -28,29 +29,24 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [usernameOrEmail, setUsernameOrEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onSuccess: (response) => {
+      localStorage.setItem('dbcviewer.auth', JSON.stringify(response))
+      onSuccess(response)
+    },
+  })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setErrorMessage('')
-    setIsSubmitting(true)
 
     try {
-      const response = await login({
+      await loginMutation.mutateAsync({
         usernameOrEmail,
         password,
       })
-
-      localStorage.setItem('dbcviewer.auth', JSON.stringify(response))
-      onSuccess(response)
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Die Anmeldung ist fehlgeschlagen.'
-
-      setErrorMessage(message)
-    } finally {
-      setIsSubmitting(false)
+    } catch {
+      // Fehlerzustand wird ueber die Mutation gerendert.
     }
   }
 
@@ -88,7 +84,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           </Typography>
         </Box>
 
-        {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+        {loginMutation.error ? <Alert severity="error">{loginMutation.error.message}</Alert> : null}
 
         <Box component="form" onSubmit={handleSubmit}>
           <Stack spacing={2}>
@@ -130,11 +126,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               size="large"
               variant="contained"
               startIcon={
-                isSubmitting ? <CircularProgress color="inherit" size={18} /> : <LoginRoundedIcon />
+                loginMutation.isPending ? <CircularProgress color="inherit" size={18} /> : <LoginRoundedIcon />
               }
-              disabled={isSubmitting || !usernameOrEmail.trim() || !password}
+              disabled={loginMutation.isPending || !usernameOrEmail.trim() || !password}
             >
-              {isSubmitting ? 'Anmeldung laeuft...' : 'Einloggen'}
+              {loginMutation.isPending ? 'Anmeldung laeuft...' : 'Einloggen'}
             </Button>
           </Stack>
         </Box>

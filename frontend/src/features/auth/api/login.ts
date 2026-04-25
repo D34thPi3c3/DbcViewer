@@ -1,15 +1,8 @@
 import type { AuthResponse, LoginRequest } from '../../../types/auth'
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7090'
+import { postAuthRequest } from './authClient'
 
 export async function login(request: LoginRequest): Promise<AuthResponse> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  })
+  const response = await postAuthRequest('/api/auth/login', request)
 
   if (!response.ok) {
     if (response.status === 401) {
