@@ -46,7 +46,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         password,
       })
     } catch {
-      // Fehlerzustand wird ueber die Mutation gerendert.
+      // Fehlerzustand wird über die Mutation gerendert.
     }
   }
 
@@ -79,7 +79,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             Anmelden
           </Typography>
           <Typography color="text.secondary">
-            Melde dich mit deinem Benutzerkonto an, um spaeter den DBC Viewer zu
+            Melde dich mit deinem Benutzerkonto an, um später den DBC Viewer zu
             benutzen.
           </Typography>
         </Box>
@@ -130,7 +130,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               }
               disabled={loginMutation.isPending || !usernameOrEmail.trim() || !password}
             >
-              {loginMutation.isPending ? 'Anmeldung laeuft...' : 'Einloggen'}
+              {loginMutation.isPending ? 'Anmeldung läuft...' : 'Einloggen'}
             </Button>
           </Stack>
         </Box>

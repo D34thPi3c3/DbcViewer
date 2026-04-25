@@ -16,21 +16,18 @@ import {
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
+import { AppMenuBar } from '../components/AppMenuBar'
 import { LoginForm } from '../features/auth/components/LoginForm'
 import { RegisterForm } from '../features/auth/components/RegisterForm'
 import type { AuthResponse } from '../types/auth'
 
 type AuthMode = 'login' | 'register'
 
-type LoginPageProps = {
-  onNavigateToUpload: () => void
-}
-
 const highlights = [
   {
     icon: <StorageRoundedIcon color="primary" />,
     title: 'DBC-Dateien lesen',
-    description: 'Spaeter koennen DBC-Strukturen ueber die API geladen und im Browser durchsucht werden.',
+    description: 'Später können DBC-Strukturen über die API geladen und im Browser durchsucht werden.',
   },
   {
     icon: <LockOpenRoundedIcon color="primary" />,
@@ -39,12 +36,12 @@ const highlights = [
   },
   {
     icon: <AutoAwesomeRoundedIcon color="primary" />,
-    title: 'Basis fuer React-Frontend',
-    description: 'Das Setup ist so angelegt, dass weitere Seiten und API-Calls direkt ergaenzt werden koennen.',
+    title: 'Basis für React-Frontend',
+    description: 'Das Setup ist so angelegt, dass weitere Seiten und API-Calls direkt ergänzt werden können.',
   },
 ]
 
-export function LoginPage({ onNavigateToUpload }: LoginPageProps) {
+export function LoginPage() {
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null)
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [lastCompletedMode, setLastCompletedMode] = useState<AuthMode | null>(null)
@@ -60,22 +57,16 @@ export function LoginPage({ onNavigateToUpload }: LoginPageProps) {
         minHeight: '100vh',
         background:
           'radial-gradient(circle at top left, rgba(77, 182, 172, 0.24), transparent 28%), radial-gradient(circle at bottom right, rgba(255, 112, 67, 0.18), transparent 24%), linear-gradient(135deg, #f4efe6 0%, #fcf8f1 44%, #eef8f6 100%)',
-        py: { xs: 4, md: 8 },
+        pb: { xs: 4, md: 8 },
       }}
     >
+      <AppMenuBar />
+
       <Container maxWidth="lg">
-        <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
+        <Grid container spacing={4} sx={{ alignItems: 'stretch', pt: { xs: 4, md: 6 } }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={3} sx={{ height: '100%', justifyContent: 'center' }}>
               <Box>
-                <Button
-                  variant="text"
-                  color="inherit"
-                  onClick={onNavigateToUpload}
-                  sx={{ px: 0, minHeight: 'unset', mb: 1 }}
-                >
-                  Zur Upload-Seite
-                </Button>
                 <Typography
                   variant="overline"
                   sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.14em' }}
@@ -83,7 +74,7 @@ export function LoginPage({ onNavigateToUpload }: LoginPageProps) {
                   DBC VIEWER
                 </Typography>
                 <Typography variant="h2" sx={{ mt: 1, maxWidth: 560 }}>
-                  Login fuer den kuenftigen Web-Viewer.
+                  Login für den künftigen Web-Viewer.
                 </Typography>
                 <Typography sx={{ mt: 2, maxWidth: 560, color: 'text.secondary', fontSize: '1.05rem' }}>
                   Der erste Frontend-Screen ist bewusst schlank gehalten: erst Auth sauber,

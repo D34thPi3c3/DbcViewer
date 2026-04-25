@@ -1,12 +1,10 @@
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded'
-import LoginRoundedIcon from '@mui/icons-material/LoginRounded'
 import PublicRoundedIcon from '@mui/icons-material/PublicRounded'
 import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded'
 import {
   Alert,
   Box,
-  Button,
   Container,
   Grid,
   List,
@@ -18,18 +16,15 @@ import {
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
+import { AppMenuBar } from '../components/AppMenuBar'
 import { PublicDbcUploadForm } from '../features/dbcFiles/components/PublicDbcUploadForm'
 import type { DbcFileResponse } from '../types/dbcFiles'
-
-type PublicUploadPageProps = {
-  onNavigateToLogin: () => void
-}
 
 const highlights = [
   {
     icon: <PublicRoundedIcon color="primary" />,
     title: 'Ohne Login erreichbar',
-    description: 'Die Startseite ist oeffentlich und eignet sich als einfacher Eingang fuer DBC-Uploads.',
+    description: 'Die Startseite ist öffentlich und eignet sich als einfacher Eingang für DBC-Uploads.',
   },
   {
     icon: <UploadFileRoundedIcon color="primary" />,
@@ -43,7 +38,7 @@ const highlights = [
   },
 ]
 
-export function PublicUploadPage({ onNavigateToLogin }: PublicUploadPageProps) {
+export function PublicUploadPage() {
   const [uploadedFile, setUploadedFile] = useState<DbcFileResponse | null>(null)
 
   return (
@@ -52,38 +47,22 @@ export function PublicUploadPage({ onNavigateToLogin }: PublicUploadPageProps) {
         minHeight: '100vh',
         background:
           'radial-gradient(circle at top left, rgba(77, 182, 172, 0.22), transparent 26%), radial-gradient(circle at 85% 15%, rgba(255, 112, 67, 0.2), transparent 22%), linear-gradient(145deg, #f4efe6 0%, #fff8ef 48%, #edf8f3 100%)',
-        py: { xs: 4, md: 8 },
+        pb: { xs: 4, md: 8 },
       }}
     >
+      <AppMenuBar />
+
       <Container maxWidth="lg">
-        <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
+        <Grid container spacing={4} sx={{ alignItems: 'stretch', pt: { xs: 4, md: 6 } }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={3} sx={{ height: '100%', justifyContent: 'center' }}>
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-                <Typography
-                  variant="overline"
-                  sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.14em' }}
-                >
-                  DBC VIEWER
-                </Typography>
-                <Button
-                  variant="text"
-                  color="inherit"
-                  startIcon={<LoginRoundedIcon />}
-                  onClick={onNavigateToLogin}
-                  sx={{ px: 0, minHeight: 'unset' }}
-                >
-                  Zum Login
-                </Button>
-              </Stack>
-
               <Box>
                 <Typography variant="h2" sx={{ mt: 1, maxWidth: 560 }}>
-                  Oeffentliche Upload-Seite fuer DBC-Dateien.
+                  Öffentliche Upload-Seite für DBC-Dateien.
                 </Typography>
                 <Typography sx={{ mt: 2, maxWidth: 560, color: 'text.secondary', fontSize: '1.05rem' }}>
                   Diese Seite ist bewusst auf den ersten Schritt optimiert: Datei abgeben,
-                  Upload bestaetigen, spaeter im Viewer weiterverarbeiten.
+                  Upload bestätigen, später im Viewer weiterverarbeiten.
                 </Typography>
               </Box>
 

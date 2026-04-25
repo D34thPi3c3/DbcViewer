@@ -47,7 +47,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     setValidationError('')
 
     if (password !== confirmPassword) {
-      setValidationError('Die Passwoerter stimmen nicht ueberein.')
+      setValidationError('Die Passwörter stimmen nicht überein.')
       return
     }
 
@@ -58,7 +58,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         password,
       })
     } catch {
-      // Fehlerzustand wird ueber die Mutation gerendert.
+      // Fehlerzustand wird über die Mutation gerendert.
     }
   }
 
@@ -162,7 +162,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
             />
 
             <TextField
-              label="Passwort bestaetigen"
+              label="Passwort bestätigen"
               type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
               value={confirmPassword}
@@ -170,7 +170,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
               error={Boolean(confirmPassword) && password !== confirmPassword}
               helperText={
                 confirmPassword && password !== confirmPassword
-                  ? 'Die Passwoerter stimmen nicht ueberein.'
+                  ? 'Die Passwörter stimmen nicht überein.'
                   : ' '
               }
             />
@@ -194,7 +194,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
                 password !== confirmPassword
               }
             >
-              {registerMutation.isPending ? 'Registrierung laeuft...' : 'Konto erstellen'}
+              {registerMutation.isPending ? 'Registrierung läuft...' : 'Konto erstellen'}
             </Button>
           </Stack>
         </Box>

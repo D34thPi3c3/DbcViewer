@@ -38,7 +38,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
 
   const selectedFileLabel = selectedFile
     ? `${selectedFile.name} (${formatFileSize(selectedFile.size)})`
-    : 'Noch keine Datei ausgewaehlt.'
+    : 'Noch keine Datei ausgewählt.'
 
   function handleFileSelection(file: File | null) {
     setSelectedFile(file)
@@ -72,7 +72,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
     try {
       await uploadMutation.mutateAsync(selectedFile)
     } catch {
-      // Fehlerzustand wird ueber die Mutation gerendert.
+      // Fehlerzustand wird über die Mutation gerendert.
     }
   }
 
@@ -87,7 +87,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
     >
       <Stack spacing={3}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-          <Chip color="primary" icon={<CloudUploadRoundedIcon />} label="Oeffentlicher Upload" sx={{ fontWeight: 700 }} />
+          <Chip color="primary" icon={<CloudUploadRoundedIcon />} label="Öffentlicher Upload" sx={{ fontWeight: 700 }} />
           <Chip label="Nur .dbc" variant="outlined" sx={{ borderColor: 'rgba(0, 105, 92, 0.24)' }} />
         </Stack>
 
@@ -131,7 +131,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
             </Box>
 
             <Stack spacing={1} sx={{ alignItems: 'center' }}>
-              <Typography variant="h6">Datei ablegen oder manuell auswaehlen</Typography>
+              <Typography variant="h6">Datei ablegen oder manuell auswählen</Typography>
               <Typography color="text.secondary" sx={{ maxWidth: 420 }}>
                 Es werden nur Dateien mit der Endung {acceptedExtension} akzeptiert.
               </Typography>
@@ -146,7 +146,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
             />
 
             <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
-              Datei waehlen
+              Datei wählen
             </Button>
 
             <Stack
@@ -183,7 +183,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
           disabled={uploadMutation.isPending || !selectedFile}
           onClick={handleUpload}
         >
-          {uploadMutation.isPending ? 'Upload laeuft...' : 'Jetzt hochladen'}
+          {uploadMutation.isPending ? 'Upload läuft...' : 'Jetzt hochladen'}
         </Button>
 
         {uploadMutation.data ? (
@@ -192,7 +192,7 @@ export function PublicDbcUploadForm({ onSuccess }: PublicDbcUploadFormProps) {
             icon={<TaskAltRoundedIcon fontSize="inherit" />}
             sx={{ borderRadius: 4 }}
           >
-            Datei <strong>{uploadMutation.data.fileName}</strong> gespeichert. Groesse:{' '}
+            Datei <strong>{uploadMutation.data.fileName}</strong> gespeichert. Größe:{' '}
             <strong>{formatFileSize(uploadMutation.data.sizeInBytes)}</strong>.
           </Alert>
         ) : null}
