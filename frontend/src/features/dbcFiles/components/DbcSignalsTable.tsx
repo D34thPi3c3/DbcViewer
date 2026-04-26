@@ -31,6 +31,14 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
     )
   }
 
+  const sortedSignals = [...message.signals].sort((left, right) => {
+    if (left.startBit !== right.startBit) {
+      return left.startBit - right.startBit
+    }
+
+    return left.name.localeCompare(right.name)
+  })
+
   return (
     <TableContainer
       key={`${message.frameId}:${message.name}`}
@@ -58,7 +66,7 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {message.signals.map((signal, index) => (
+          {sortedSignals.map((signal, index) => (
             <TableRow
               key={`${message.frameId}:${message.name}:${signal.name}:${signal.startBit}:${index}`}
               sx={{

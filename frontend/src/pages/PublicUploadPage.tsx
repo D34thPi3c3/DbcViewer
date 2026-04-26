@@ -3,8 +3,6 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded'
 import {
   Alert,
   Box,
-  Container,
-  Grid,
   Paper,
   Stack,
   Typography,
@@ -36,32 +34,18 @@ export function PublicUploadPage() {
       <AppMenuBar />
 
       <Stack spacing={4} sx={{ pt: { xs: 3, md: 4 } }}>
-        <Container maxWidth="lg">
-          <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
-            <Grid size={{ xs: 12 }}>
-              <Stack spacing={3}>
-                {uploadedFile ? (
-                  <Alert severity="info" icon={<CloudUploadRoundedIcon fontSize="inherit" />} sx={{ borderRadius: 4 }}>
-                    Letzter Upload: <strong>{uploadedFile.fileName}</strong> am{' '}
-                    <strong>{new Date(uploadedFile.uploadedAtUtc).toLocaleString('de-CH')}</strong>.
-                  </Alert>
-                ) : null}
+        <Box sx={{ px: { xs: 2, md: 4 } }}>
+          <Stack spacing={3}>
+            {uploadedFile ? (
+              <Alert severity="info" icon={<CloudUploadRoundedIcon fontSize="inherit" />} sx={{ borderRadius: 0 }}>
+                Letzter Upload: <strong>{uploadedFile.fileName}</strong> am{' '}
+                <strong>{new Date(uploadedFile.uploadedAtUtc).toLocaleString('de-CH')}</strong>.
+              </Alert>
+            ) : null}
 
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: { xs: 0.5, md: 0.75 },
-                    borderRadius: 6,
-                    bgcolor: 'rgba(255, 250, 244, 0.52)',
-                    backdropFilter: 'blur(10px)',
-                  }}
-                >
-                  <PublicDbcUploadForm onSuccess={setUploadedFile} />
-                </Paper>
-              </Stack>
-            </Grid>
-          </Grid>
-        </Container>
+            <PublicDbcUploadForm onSuccess={setUploadedFile} />
+          </Stack>
+        </Box>
 
         {uploadedFile ? (
           <Box sx={{ px: { xs: 2, md: 4 } }}>
