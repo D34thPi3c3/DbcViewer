@@ -12,13 +12,29 @@ type DbcDefinitionTablesProps = {
 }
 
 export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
-  const [selectedMessageIndex, setSelectedMessageIndex] = useState(0)
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    definition.messages[0]?.id ?? null,
+  )
 
   useEffect(() => {
-    setSelectedMessageIndex(0)
-  }, [definition])
+    setSelectedMessageId(definition.messages[0]?.id ?? null)
+  }, [definition.fileId])
 
-  const selectedMessage = definition.messages[selectedMessageIndex] ?? null
+  useEffect(() => {
+    if (!selectedMessageId) {
+      if (definition.messages.length > 0) {
+        setSelectedMessageId(definition.messages[0].id)
+      }
+      return
+    }
+
+    const selectedMessageStillExists = definition.messages.some((message) => message.id === selectedMessageId)
+    if (!selectedMessageStillExists) {
+      setSelectedMessageId(definition.messages[0]?.id ?? null)
+    }
+  }, [definition.messages, selectedMessageId])
+
+  const selectedMessage = definition.messages.find((message) => message.id === selectedMessageId) ?? null
 
   return (
     <Stack spacing={3}>
@@ -42,8 +58,8 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
           <DbcMessagesTable
             fileId={definition.fileId}
             messages={definition.messages}
-            selectedMessageIndex={selectedMessageIndex}
-            onSelectMessage={setSelectedMessageIndex}
+            selectedMessageId={selectedMessageId}
+            onSelectMessage={setSelectedMessageId}
           />
         </DefinitionTableCard>
 

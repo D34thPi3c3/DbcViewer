@@ -1,7 +1,9 @@
+import AddRoundedIcon from '@mui/icons-material/AddRounded'
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded'
 import EditRoundedIcon from '@mui/icons-material/EditRounded'
-import { Alert, Box, Stack, TextField } from '@mui/material'
+import { Alert, Box, Button, Stack, TextField } from '@mui/material'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
@@ -17,29 +19,30 @@ import {
   type GridRowModel,
 } from '@mui/x-data-grid'
 import type { DbcDefinitionResponse, DbcMessageResponse } from '../../../types/dbcFiles'
+import { createDbcMessage } from '../api/createDbcMessage'
+import { deleteDbcMessage } from '../api/deleteDbcMessage'
 import { updateDbcMessage } from '../api/updateDbcMessage'
 
 type DbcMessagesTableProps = {
   fileId: string
   messages: DbcMessageResponse[]
-  selectedMessageIndex: number
-  onSelectMessage: (index: number) => void
+  selectedMessageId: string | null
+  onSelectMessage: (messageId: string | null) => void
 }
 
 type DbcMessageGridRow = {
   id: string
   frameId: number | string
   name: string
-  lengthInBytes: number
+  lengthInBytes: number | string
   transmitter: string
   signalCount: number
-  originalIndex: number
 }
 
 export function DbcMessagesTable({
   fileId,
   messages,
-  selectedMessageIndex,
+  selectedMessageId,
   onSelectMessage,
 }: DbcMessagesTableProps) {
   const queryClient = useQueryClient()
@@ -48,20 +51,17 @@ export function DbcMessagesTable({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const selectedMessageId = messages[selectedMessageIndex]?.id ?? null
-
   const visibleRows = useMemo<DbcMessageGridRow[]>(() => {
     const normalizedQuery = searchValue.trim().toLowerCase()
 
     return messages
-      .map((message, index) => ({
+      .map((message) => ({
         id: message.id,
         frameId: message.frameId,
         name: message.name,
         lengthInBytes: message.lengthInBytes,
         transmitter: message.transmitter,
         signalCount: message.signals.length,
-        originalIndex: index,
       }))
       .filter((message) => {
         if (!normalizedQuery) {
@@ -96,19 +96,61 @@ export function DbcMessagesTable({
     })
   }, [visibleRows])
 
+  const createMutation = useMutation<DbcMessageResponse, Error>({
+    mutationFn: () =>
+      createDbcMessage(fileId, {
+        frameId: findNextFrameId(messages),
+        lengthInBytes: 8,
+        name: buildNextMessageName(messages),
+        transmitter: messages.find((message) => message.id === selectedMessageId)?.transmitter
+          ?? messages[0]?.transmitter
+          ?? 'Vector__XXX',
+      }),
+    onMutate: () => {
+      setFeedbackMessage(null)
+      setErrorMessage(null)
+    },
+    onSuccess: (createdMessage) => {
+      queryClient.setQueryData<DbcDefinitionResponse>(['dbc-definition', fileId], (currentDefinition) => {
+        if (!currentDefinition) {
+          return currentDefinition
+        }
+
+        return {
+          ...currentDefinition,
+          messages: [...currentDefinition.messages, createdMessage],
+        }
+      })
+
+      onSelectMessage(createdMessage.id)
+      setRowModesModel((currentModel) => ({
+        ...currentModel,
+        [createdMessage.id]: { mode: GridRowModes.Edit },
+      }))
+      setFeedbackMessage('Nachricht angelegt.')
+      setErrorMessage(null)
+    },
+    onError: (error) => {
+      setFeedbackMessage(null)
+      setErrorMessage(error.message)
+    },
+  })
+
   const updateMutation = useMutation<
     DbcMessageResponse,
     Error,
     {
       messageId: string
       frameId: number
+      lengthInBytes: number
       name: string
       transmitter: string
     }
   >({
-    mutationFn: async ({ messageId, frameId, name, transmitter }) =>
+    mutationFn: async ({ messageId, frameId, lengthInBytes, name, transmitter }) =>
       updateDbcMessage(fileId, messageId, {
         frameId,
+        lengthInBytes,
         name,
         transmitter,
       }),
@@ -131,6 +173,37 @@ export function DbcMessagesTable({
       })
 
       setFeedbackMessage('Nachricht gespeichert.')
+      setErrorMessage(null)
+    },
+    onError: (error) => {
+      setFeedbackMessage(null)
+      setErrorMessage(error.message)
+    },
+  })
+
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: async (messageId) => deleteDbcMessage(fileId, messageId),
+    onMutate: () => {
+      setFeedbackMessage(null)
+      setErrorMessage(null)
+    },
+    onSuccess: (_, deletedMessageId) => {
+      queryClient.setQueryData<DbcDefinitionResponse>(['dbc-definition', fileId], (currentDefinition) => {
+        if (!currentDefinition) {
+          return currentDefinition
+        }
+
+        return {
+          ...currentDefinition,
+          messages: currentDefinition.messages.filter((message) => message.id !== deletedMessageId),
+        }
+      })
+
+      if (selectedMessageId === deletedMessageId) {
+        onSelectMessage(null)
+      }
+
+      setFeedbackMessage('Nachricht gelöscht.')
       setErrorMessage(null)
     },
     onError: (error) => {
@@ -176,9 +249,15 @@ export function DbcMessagesTable({
         field: 'lengthInBytes',
         headerName: 'DLC',
         flex: 0.6,
-        minWidth: 90,
-        editable: false,
-        type: 'number',
+        minWidth: 100,
+        editable: true,
+        preProcessEditCellProps: ({ props }) => {
+          const parsedValue = parseNonNegativeIntegerValue(props.value)
+          return {
+            ...props,
+            error: parsedValue === null || parsedValue > 32767,
+          }
+        },
       },
       {
         field: 'transmitter',
@@ -205,7 +284,7 @@ export function DbcMessagesTable({
         field: 'actions',
         type: 'actions',
         headerName: 'Aktion',
-        minWidth: 100,
+        minWidth: 140,
         getActions: ({ id }) => {
           const isEditing = rowModesModel[id]?.mode === GridRowModes.Edit
 
@@ -251,11 +330,24 @@ export function DbcMessagesTable({
               }}
               color="inherit"
             />,
+            <GridActionsCellItem
+              key="delete"
+              icon={<DeleteOutlineRoundedIcon fontSize="small" />}
+              label="Löschen"
+              onClick={() => {
+                if (!window.confirm('Nachricht wirklich löschen? Alle enthaltenen Signale werden ebenfalls entfernt.')) {
+                  return
+                }
+
+                void deleteMutation.mutateAsync(String(id))
+              }}
+              color="inherit"
+            />,
           ]
         },
       },
     ],
-    [rowModesModel],
+    [deleteMutation, rowModesModel],
   )
 
   const handleRowEditStop: GridEventListener<'rowEditStop'> = (params, event) => {
@@ -269,11 +361,16 @@ export function DbcMessagesTable({
     originalRow: GridRowModel<DbcMessageGridRow>,
   ) {
     const parsedFrameId = parseFrameIdInput(String(updatedRow.frameId))
+    const parsedLengthInBytes = parseNonNegativeIntegerValue(updatedRow.lengthInBytes)
     const nextName = String(updatedRow.name ?? '').trim()
     const nextTransmitter = String(updatedRow.transmitter ?? '').trim()
 
     if (parsedFrameId === null) {
       throw new Error('CAN_Id muss hexadezimal mit 0x-Präfix oder dezimal angegeben werden.')
+    }
+
+    if (parsedLengthInBytes === null || parsedLengthInBytes > 32767) {
+      throw new Error('DLC muss eine ganze Zahl zwischen 0 und 32767 sein.')
     }
 
     if (!nextName) {
@@ -287,6 +384,7 @@ export function DbcMessagesTable({
     const savedMessage = await updateMutation.mutateAsync({
       messageId: updatedRow.id,
       frameId: parsedFrameId,
+      lengthInBytes: parsedLengthInBytes,
       name: nextName,
       transmitter: nextTransmitter,
     })
@@ -295,20 +393,36 @@ export function DbcMessagesTable({
       ...originalRow,
       frameId: savedMessage.frameId,
       name: savedMessage.name,
+      lengthInBytes: savedMessage.lengthInBytes,
       transmitter: savedMessage.transmitter,
       signalCount: savedMessage.signals.length,
     }
   }
 
+  const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending
+
   return (
     <Stack spacing={2}>
-      <TextField
-        size="small"
-        label="Nachrichten suchen"
-        placeholder="ID, Name, DLC oder Sender"
-        value={searchValue}
-        onChange={(event) => setSearchValue(event.target.value)}
-      />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+        <TextField
+          size="small"
+          label="Nachrichten suchen"
+          placeholder="ID, Name, DLC oder Sender"
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
+          sx={{ flex: 1 }}
+        />
+        <Button
+          variant="contained"
+          startIcon={<AddRoundedIcon />}
+          onClick={() => {
+            void createMutation.mutateAsync()
+          }}
+          disabled={isBusy}
+        >
+          Nachricht hinzufügen
+        </Button>
+      </Stack>
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
       {feedbackMessage ? <Alert severity="success">{feedbackMessage}</Alert> : null}
@@ -333,9 +447,9 @@ export function DbcMessagesTable({
           onProcessRowUpdateError={(error) => setErrorMessage(error.message)}
           disableRowSelectionOnClick
           hideFooter
-          loading={updateMutation.isPending}
+          loading={isBusy}
           onRowClick={(params) => {
-            onSelectMessage(params.row.originalIndex)
+            onSelectMessage(params.row.id)
           }}
           getRowClassName={(params) =>
             params.row.id === selectedMessageId ? 'dbc-message-row-selected' : ''
@@ -477,4 +591,36 @@ function parseFrameIdInput(value: string): number | null {
   }
 
   return parsedValue
+}
+
+function parseNonNegativeIntegerValue(value: unknown): number | null {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (!/^\d+$/.test(normalizedValue)) {
+    return null
+  }
+
+  return Number.parseInt(normalizedValue, 10)
+}
+
+function findNextFrameId(messages: DbcMessageResponse[]) {
+  const usedFrameIds = new Set(messages.map((message) => message.frameId))
+  let candidate = 0x100
+
+  while (usedFrameIds.has(candidate)) {
+    candidate += 1
+  }
+
+  return candidate
+}
+
+function buildNextMessageName(messages: DbcMessageResponse[]) {
+  const usedNames = new Set(messages.map((message) => message.name.toLowerCase()))
+  let counter = 1
+
+  while (usedNames.has(`NewMessage${counter}`.toLowerCase())) {
+    counter += 1
+  }
+
+  return `NewMessage${counter}`
 }

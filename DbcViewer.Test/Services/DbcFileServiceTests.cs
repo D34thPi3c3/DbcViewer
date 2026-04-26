@@ -279,17 +279,19 @@ public sealed class DbcFileServiceTests
         var result = await service.UpdateMessageAsync(
             fileId,
             messageId,
-            new UpdateDbcMessageRequest(512, "VehicleStatusNew", "Gateway"));
+            new UpdateDbcMessageRequest(512, 12, "VehicleStatusNew", "Gateway"));
 
         // Assert
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Message);
         Assert.Equal((uint)512, result.Message!.FrameId);
+        Assert.Equal((ushort)12, result.Message.LengthInBytes);
         Assert.Equal("VehicleStatusNew", result.Message.Name);
         Assert.Equal("Gateway", result.Message.Transmitter);
 
         var savedMessage = await dbContext.DbcMessages.SingleAsync(message => message.Id == messageId);
         Assert.Equal(512, savedMessage.FrameId);
+        Assert.Equal(12, savedMessage.LengthInBytes);
         Assert.Equal("VehicleStatusNew", savedMessage.Name);
         Assert.Equal("Gateway", savedMessage.Transmitter);
     }
@@ -320,7 +322,7 @@ public sealed class DbcFileServiceTests
         var result = await service.UpdateMessageAsync(
             fileId,
             messageId,
-            new UpdateDbcMessageRequest(300, "VehicleStatus", "Gateway"));
+            new UpdateDbcMessageRequest(300, 8, "VehicleStatus", "Gateway"));
 
         // Assert
         Assert.False(result.Succeeded);
@@ -349,7 +351,7 @@ public sealed class DbcFileServiceTests
         var result = await service.UpdateMessageAsync(
             fileId,
             Guid.NewGuid(),
-            new UpdateDbcMessageRequest(512, "VehicleStatusNew", "Gateway"));
+            new UpdateDbcMessageRequest(512, 8, "VehicleStatusNew", "Gateway"));
 
         // Assert
         Assert.True(result.NotFound);
@@ -473,6 +475,180 @@ public sealed class DbcFileServiceTests
         Assert.Contains("byteOrder", result.Errors.Keys);
         Assert.Contains("valueType", result.Errors.Keys);
         Assert.Contains("unit", result.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task CreateMessageAsync_AddsMessageWithNextSortOrder()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+
+        // Act
+        var result = await service.CreateMessageAsync(
+            fileId,
+            new UpdateDbcMessageRequest(300, 16, "EngineData", "Gateway"));
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Message);
+        Assert.Equal((uint)300, result.Message!.FrameId);
+        Assert.Equal((ushort)16, result.Message.LengthInBytes);
+        Assert.Equal("EngineData", result.Message.Name);
+        Assert.Equal("Gateway", result.Message.Transmitter);
+        Assert.Empty(result.Message.Signals);
+
+        var savedMessages = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .OrderBy(message => message.SortOrder)
+            .ToListAsync();
+
+        Assert.Equal(2, savedMessages.Count);
+        Assert.Equal(["VehicleStatus", "EngineData"], savedMessages.Select(message => message.Name).ToArray());
+        Assert.Equal([0, 1], savedMessages.Select(message => message.SortOrder).ToArray());
+    }
+
+    [Fact]
+    public async Task DeleteMessageAsync_RemovesMessageAndReordersRemainingMessages()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+
+            BO_ 300 EngineData: 8 Vector__XXX
+             SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId && message.FrameId == 256)
+            .Select(message => message.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.DeleteMessageAsync(fileId, messageId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.False(result.NotFound);
+
+        var remainingMessages = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .OrderBy(message => message.SortOrder)
+            .ToListAsync();
+
+        var remainingMessage = Assert.Single(remainingMessages);
+        Assert.Equal("EngineData", remainingMessage.Name);
+        Assert.Equal(0, remainingMessage.SortOrder);
+        Assert.Empty(await dbContext.DbcSignals.Where(signal => signal.DbcMessageId == messageId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateSignalAsync_AddsSignalWithNextSortOrder()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .Select(message => message.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.CreateSignalAsync(
+            fileId,
+            messageId,
+            new UpdateDbcSignalRequest(
+                "EngineSpeed",
+                null,
+                16,
+                16,
+                "little-endian",
+                "unsigned",
+                0.25,
+                0,
+                0,
+                8000,
+                "rpm",
+                null));
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Signal);
+        Assert.Equal("EngineSpeed", result.Signal!.Name);
+        Assert.Equal("rpm", result.Signal.Unit);
+        Assert.Empty(result.Signal.Receivers);
+
+        var savedSignals = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId)
+            .OrderBy(signal => signal.SortOrder)
+            .ToListAsync();
+
+        Assert.Equal(2, savedSignals.Count);
+        Assert.Equal(["VehicleSpeed", "EngineSpeed"], savedSignals.Select(signal => signal.Name).ToArray());
+        Assert.Equal([0, 1], savedSignals.Select(signal => signal.SortOrder).ToArray());
+    }
+
+    [Fact]
+    public async Task DeleteSignalAsync_RemovesSignalAndReordersRemainingSignals()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+             SG_ EngineSpeed : 16|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .Select(message => message.Id)
+            .SingleAsync();
+        var signalId = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId && signal.Name == "VehicleSpeed")
+            .Select(signal => signal.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.DeleteSignalAsync(fileId, messageId, signalId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.False(result.NotFound);
+
+        var remainingSignals = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId)
+            .OrderBy(signal => signal.SortOrder)
+            .ToListAsync();
+
+        var remainingSignal = Assert.Single(remainingSignals);
+        Assert.Equal("EngineSpeed", remainingSignal.Name);
+        Assert.Equal(0, remainingSignal.SortOrder);
     }
 
     [Fact]

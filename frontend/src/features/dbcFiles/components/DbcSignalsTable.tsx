@@ -1,7 +1,9 @@
+import AddRoundedIcon from '@mui/icons-material/AddRounded'
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded'
 import EditRoundedIcon from '@mui/icons-material/EditRounded'
-import { Alert, Autocomplete, Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
@@ -17,6 +19,8 @@ import {
   type GridRowModel,
 } from '@mui/x-data-grid'
 import type { DbcDefinitionResponse, DbcMessageResponse, DbcSignalResponse } from '../../../types/dbcFiles'
+import { createDbcSignal } from '../api/createDbcSignal'
+import { deleteDbcSignal } from '../api/deleteDbcSignal'
 import { updateDbcSignal } from '../api/updateDbcSignal'
 
 type DbcSignalsTableProps = {
@@ -38,7 +42,6 @@ type DbcSignalGridRow = {
   maximum: number
   unit: string
   comment: string
-  originalIndex: number
 }
 
 export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
@@ -56,7 +59,7 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
     const normalizedQuery = searchValue.trim().toLowerCase()
 
     return message.signals
-      .map((signal, index) => ({
+      .map((signal) => ({
         id: signal.id,
         name: signal.name,
         multiplexerIndicator: signal.multiplexerIndicator ?? '',
@@ -70,7 +73,6 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
         maximum: signal.maximum,
         unit: signal.unit,
         comment: signal.comment ?? '',
-        originalIndex: index,
       }))
       .filter((signal) => {
         if (!normalizedQuery) {
@@ -110,6 +112,69 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
       return hasChanges ? nextModel : currentModel
     })
   }, [visibleRows])
+
+  const createMutation = useMutation<DbcSignalResponse, Error>({
+    mutationFn: async () => {
+      if (!message) {
+        throw new Error('Keine Nachricht ausgewählt.')
+      }
+
+      return createDbcSignal(fileId, message.id, {
+        name: buildNextSignalName(message.signals),
+        multiplexerIndicator: null,
+        startBit: 0,
+        bitLength: 1,
+        byteOrder: 'little-endian',
+        valueType: 'unsigned',
+        factor: 1,
+        offset: 0,
+        minimum: 0,
+        maximum: 1,
+        unit: '',
+        comment: null,
+      })
+    },
+    onMutate: () => {
+      setFeedbackMessage(null)
+      setErrorMessage(null)
+    },
+    onSuccess: (createdSignal) => {
+      if (!message) {
+        return
+      }
+
+      queryClient.setQueryData<DbcDefinitionResponse>(['dbc-definition', fileId], (currentDefinition) => {
+        if (!currentDefinition) {
+          return currentDefinition
+        }
+
+        return {
+          ...currentDefinition,
+          messages: currentDefinition.messages.map((currentMessage) => {
+            if (currentMessage.id !== message.id) {
+              return currentMessage
+            }
+
+            return {
+              ...currentMessage,
+              signals: [...currentMessage.signals, createdSignal],
+            }
+          }),
+        }
+      })
+
+      setRowModesModel((currentModel) => ({
+        ...currentModel,
+        [createdSignal.id]: { mode: GridRowModes.Edit },
+      }))
+      setFeedbackMessage('Signal angelegt.')
+      setErrorMessage(null)
+    },
+    onError: (error) => {
+      setFeedbackMessage(null)
+      setErrorMessage(error.message)
+    },
+  })
 
   const updateMutation = useMutation<
     DbcSignalResponse,
@@ -182,6 +247,52 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
       })
 
       setFeedbackMessage('Signal gespeichert.')
+      setErrorMessage(null)
+    },
+    onError: (error) => {
+      setFeedbackMessage(null)
+      setErrorMessage(error.message)
+    },
+  })
+
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: async (signalId) => {
+      if (!message) {
+        throw new Error('Keine Nachricht ausgewählt.')
+      }
+
+      return deleteDbcSignal(fileId, message.id, signalId)
+    },
+    onMutate: () => {
+      setFeedbackMessage(null)
+      setErrorMessage(null)
+    },
+    onSuccess: (_, deletedSignalId) => {
+      if (!message) {
+        return
+      }
+
+      queryClient.setQueryData<DbcDefinitionResponse>(['dbc-definition', fileId], (currentDefinition) => {
+        if (!currentDefinition) {
+          return currentDefinition
+        }
+
+        return {
+          ...currentDefinition,
+          messages: currentDefinition.messages.map((currentMessage) => {
+            if (currentMessage.id !== message.id) {
+              return currentMessage
+            }
+
+            return {
+              ...currentMessage,
+              signals: currentMessage.signals.filter((signal) => signal.id !== deletedSignalId),
+            }
+          }),
+        }
+      })
+
+      setFeedbackMessage('Signal gelöscht.')
       setErrorMessage(null)
     },
     onError: (error) => {
@@ -344,7 +455,7 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
         field: 'actions',
         type: 'actions',
         headerName: 'Aktion',
-        minWidth: 100,
+        minWidth: 140,
         getActions: ({ id }) => {
           const isEditing = rowModesModel[id]?.mode === GridRowModes.Edit
 
@@ -390,11 +501,24 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
               }}
               color="inherit"
             />,
+            <GridActionsCellItem
+              key="delete"
+              icon={<DeleteOutlineRoundedIcon fontSize="small" />}
+              label="Löschen"
+              onClick={() => {
+                if (!window.confirm('Signal wirklich löschen?')) {
+                  return
+                }
+
+                void deleteMutation.mutateAsync(String(id))
+              }}
+              color="inherit"
+            />,
           ]
         },
       },
     ],
-    [rowModesModel],
+    [deleteMutation, rowModesModel],
   )
 
   const handleRowEditStop: GridEventListener<'rowEditStop'> = (params, event) => {
@@ -504,15 +628,30 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
     )
   }
 
+  const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending
+
   return (
     <Stack spacing={2}>
-      <TextField
-        size="small"
-        label="Signale suchen"
-        placeholder="Name, Mode, Startbit, Typ oder Kommentar"
-        value={searchValue}
-        onChange={(event) => setSearchValue(event.target.value)}
-      />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+        <TextField
+          size="small"
+          label="Signale suchen"
+          placeholder="Name, Mode, Startbit, Typ oder Kommentar"
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
+          sx={{ flex: 1 }}
+        />
+        <Button
+          variant="contained"
+          startIcon={<AddRoundedIcon />}
+          onClick={() => {
+            void createMutation.mutateAsync()
+          }}
+          disabled={isBusy}
+        >
+          Signal hinzufügen
+        </Button>
+      </Stack>
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
       {feedbackMessage ? <Alert severity="success">{feedbackMessage}</Alert> : null}
@@ -537,7 +676,7 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
           onProcessRowUpdateError={(error) => setErrorMessage(error.message)}
           disableRowSelectionOnClick
           hideFooter
-          loading={updateMutation.isPending}
+          loading={isBusy}
           sx={{
             border: 'none',
             '--DataGrid-overlayHeight': '160px',
@@ -576,56 +715,8 @@ export function DbcSignalsTable({ fileId, message }: DbcSignalsTableProps) {
   )
 }
 
-type StandardEditInputCellProps = GridRenderEditCellParams<DbcSignalGridRow> & {
-  initialValueFormatter?: (value: unknown) => string
-  placeholder?: string
-}
-
 type SelectEditCellProps = GridRenderEditCellParams<DbcSignalGridRow> & {
   options: readonly string[]
-}
-
-function StandardEditInputCell({
-  api,
-  field,
-  hasFocus,
-  id,
-  initialValueFormatter,
-  placeholder,
-  value,
-}: StandardEditInputCellProps) {
-  const formattedValue = initialValueFormatter
-    ? initialValueFormatter(value)
-    : String(value ?? '')
-  const [localValue, setLocalValue] = useState(formattedValue)
-
-  useEffect(() => {
-    setLocalValue(formattedValue)
-  }, [formattedValue])
-
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextValue = event.target.value
-    setLocalValue(nextValue)
-    void api.setEditCellValue({ id, field, value: nextValue }, event)
-  }
-
-  return (
-    <TextField
-      size="small"
-      variant="standard"
-      value={localValue}
-      onChange={handleChange}
-      autoFocus={hasFocus}
-      placeholder={placeholder}
-      fullWidth
-      onClick={(event) => event.stopPropagation()}
-      sx={{
-        '& .MuiInputBase-root': {
-          borderRadius: 0,
-        },
-      }}
-    />
-  )
 }
 
 function SelectEditCell({
@@ -670,53 +761,123 @@ function SelectEditCell({
 
 function ModeEditCell({
   api,
-  field,
   hasFocus,
   id,
   value,
 }: GridRenderEditCellParams<DbcSignalGridRow>) {
-  const [localValue, setLocalValue] = useState(String(value ?? ''))
+  const [{ kind, numberValue }, setModeState] = useState(() => parseModeEditorState(value))
 
   useEffect(() => {
-    setLocalValue(String(value ?? ''))
+    setModeState(parseModeEditorState(value))
   }, [value])
 
-  function commitValue(nextValue: string) {
-    setLocalValue(nextValue)
-    void api.setEditCellValue({ id, field, value: nextValue })
+  function commitValue(nextKind: ModeEditorKind, nextNumberValue: string) {
+    const nextValue = serializeModeEditorState(nextKind, nextNumberValue)
+    void api.setEditCellValue({ id, field: 'multiplexerIndicator', value: nextValue })
   }
 
   return (
-    <Autocomplete
-      freeSolo
-      autoHighlight
-      options={modeOptions}
-      value={localValue}
-      onChange={(_, nextValue) => {
-        commitValue(typeof nextValue === 'string' ? nextValue : '')
-      }}
-      onInputChange={(_, nextInputValue, reason) => {
-        if (reason === 'input') {
-          commitValue(nextInputValue)
-        }
-      }}
-      renderInput={(params) => (
+    <Stack direction="row" spacing={1} sx={{ width: '100%', alignItems: 'flex-end' }}>
+      <TextField
+        select
+        size="small"
+        variant="standard"
+        value={kind}
+        autoFocus={hasFocus}
+        fullWidth
+        onChange={(event) => {
+          const nextKind = event.target.value as ModeEditorKind
+          const nextNumberValue =
+            nextKind === 'multiplexerValue'
+              ? numberValue || '0'
+              : numberValue
+
+          setModeState({
+            kind: nextKind,
+            numberValue: nextNumberValue,
+          })
+          commitValue(nextKind, nextNumberValue)
+        }}
+        onClick={(event) => event.stopPropagation()}
+        sx={{
+          '& .MuiInputBase-root': {
+            borderRadius: 0,
+          },
+        }}
+      >
+        <MenuItem value="single">Einzelsignal</MenuItem>
+        <MenuItem value="multiplexer">Multiplexer</MenuItem>
+        <MenuItem value="multiplexerValue">Multiplexerwert</MenuItem>
+      </TextField>
+
+      {kind === 'multiplexerValue' ? (
         <TextField
-          {...params}
           size="small"
           variant="standard"
-          autoFocus={hasFocus}
-          placeholder="leer, M oder m1"
+          value={numberValue}
+          onChange={(event) => {
+            const sanitizedValue = event.target.value.replace(/\D+/g, '')
+            setModeState({
+              kind,
+              numberValue: sanitizedValue,
+            })
+            commitValue(kind, sanitizedValue)
+          }}
+          placeholder="0"
+          slotProps={{
+            htmlInput: {
+              inputMode: 'numeric',
+              pattern: '[0-9]*',
+            },
+          }}
           onClick={(event) => event.stopPropagation()}
           sx={{
+            width: 80,
             '& .MuiInputBase-root': {
               borderRadius: 0,
             },
           }}
         />
-      )}
-    />
+      ) : null}
+    </Stack>
   )
+}
+
+type ModeEditorKind = 'single' | 'multiplexer' | 'multiplexerValue'
+
+function parseModeEditorState(value: unknown): { kind: ModeEditorKind; numberValue: string } {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (!normalizedValue) {
+    return { kind: 'single', numberValue: '' }
+  }
+
+  if (normalizedValue === 'M') {
+    return { kind: 'multiplexer', numberValue: '' }
+  }
+
+  if (/^m\d+$/i.test(normalizedValue)) {
+    return {
+      kind: 'multiplexerValue',
+      numberValue: normalizedValue.slice(1),
+    }
+  }
+
+  return {
+    kind: 'multiplexerValue',
+    numberValue: normalizedValue.replace(/\D+/g, ''),
+  }
+}
+
+function serializeModeEditorState(kind: ModeEditorKind, numberValue: string) {
+  switch (kind) {
+    case 'single':
+      return ''
+    case 'multiplexer':
+      return 'M'
+    case 'multiplexerValue':
+      return `m${numberValue}`
+  }
 }
 
 function formatSignalMode(multiplexerIndicator: string) {
@@ -786,10 +947,16 @@ function isValidMultiplexerIndicator(value: string) {
   return normalizeMultiplexerIndicator(value) !== undefined
 }
 
+function buildNextSignalName(signals: DbcSignalResponse[]) {
+  const usedNames = new Set(signals.map((signal) => signal.name.toLowerCase()))
+  let counter = 1
+
+  while (usedNames.has(`NewSignal${counter}`.toLowerCase())) {
+    counter += 1
+  }
+
+  return `NewSignal${counter}`
+}
+
 const byteOrderOptions = ['little-endian', 'big-endian'] as const
 const valueTypeOptions = ['unsigned', 'signed', 'float', 'double'] as const
-const modeOptions = [
-  '',
-  'M',
-  ...Array.from({ length: 17 }, (_, index) => `m${index}`),
-] as const

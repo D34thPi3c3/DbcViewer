@@ -38,3 +38,9 @@ export async function postMultipartRequest(path: string, formData: FormData): Pr
     body: formData,
   })
 }
+
+export async function deleteRequest(path: string): Promise<Response> {
+  return fetch(`${apiBaseUrl}${path}`, {
+    method: 'DELETE',
+  })
+}

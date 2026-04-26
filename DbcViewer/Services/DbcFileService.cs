@@ -102,6 +102,64 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         };
     }
 
+    public async Task<UpdateDbcMessageResult> CreateMessageAsync(
+        Guid fileId,
+        UpdateDbcMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationErrors = Validate(request);
+        if (validationErrors.Count > 0)
+        {
+            return new UpdateDbcMessageResult
+            {
+                Errors = validationErrors
+            };
+        }
+
+        var dbcFile = await dbContext.DbcFiles
+            .Include(file => file.Messages.OrderBy(message => message.SortOrder))
+            .ThenInclude(message => message.Signals.OrderBy(signal => signal.SortOrder))
+            .SingleOrDefaultAsync(file => file.Id == fileId, cancellationToken);
+
+        if (dbcFile is null)
+        {
+            return new UpdateDbcMessageResult
+            {
+                NotFound = true
+            };
+        }
+
+        var frameIdAlreadyAssigned = dbcFile.Messages.Any(message => message.FrameId == request.FrameId);
+        if (frameIdAlreadyAssigned)
+        {
+            return new UpdateDbcMessageResult
+            {
+                Errors = new Dictionary<string, string[]>
+                {
+                    ["frameId"] = ["The CAN ID is already used by another message in this file."]
+                }
+            };
+        }
+
+        var dbcMessage = new DbcMessage
+        {
+            DbcFileId = fileId,
+            FrameId = request.FrameId,
+            LengthInBytes = checked((short)request.LengthInBytes),
+            Name = request.Name.Trim(),
+            Transmitter = request.Transmitter.Trim(),
+            SortOrder = dbcFile.Messages.Count
+        };
+
+        dbContext.DbcMessages.Add(dbcMessage);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new UpdateDbcMessageResult
+        {
+            Message = dbcMessage.ToResponse()
+        };
+    }
+
     public async Task<UpdateDbcMessageResult> UpdateMessageAsync(
         Guid fileId,
         Guid messageId,
@@ -153,6 +211,7 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         }
 
         dbcMessage.FrameId = request.FrameId;
+        dbcMessage.LengthInBytes = checked((short)request.LengthInBytes);
         dbcMessage.Name = normalizedName;
         dbcMessage.Transmitter = normalizedTransmitter;
 
@@ -161,6 +220,104 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         return new UpdateDbcMessageResult
         {
             Message = dbcMessage.ToResponse()
+        };
+    }
+
+    public async Task<DeleteDbcItemResult> DeleteMessageAsync(
+        Guid fileId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        var dbcMessage = await dbContext.DbcMessages
+            .Include(message => message.Signals)
+            .SingleOrDefaultAsync(
+                message => message.Id == messageId && message.DbcFileId == fileId,
+                cancellationToken);
+
+        if (dbcMessage is null)
+        {
+            return new DeleteDbcItemResult
+            {
+                NotFound = true
+            };
+        }
+
+        var remainingMessages = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId && message.Id != messageId)
+            .OrderBy(message => message.SortOrder)
+            .ToListAsync(cancellationToken);
+
+        dbContext.DbcSignals.RemoveRange(dbcMessage.Signals);
+        dbContext.DbcMessages.Remove(dbcMessage);
+
+        for (var index = 0; index < remainingMessages.Count; index++)
+        {
+            remainingMessages[index].SortOrder = index;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new DeleteDbcItemResult();
+    }
+
+    public async Task<UpdateDbcSignalResult> CreateSignalAsync(
+        Guid fileId,
+        Guid messageId,
+        UpdateDbcSignalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationErrors = Validate(request);
+        if (validationErrors.Count > 0)
+        {
+            return new UpdateDbcSignalResult
+            {
+                Errors = validationErrors
+            };
+        }
+
+        var dbcMessage = await dbContext.DbcMessages
+            .Include(message => message.Signals.OrderBy(signal => signal.SortOrder))
+            .SingleOrDefaultAsync(
+                message => message.Id == messageId && message.DbcFileId == fileId,
+                cancellationToken);
+
+        if (dbcMessage is null)
+        {
+            return new UpdateDbcSignalResult
+            {
+                NotFound = true
+            };
+        }
+
+        var dbcSignal = new DbcSignal
+        {
+            DbcMessageId = messageId,
+            Name = request.Name.Trim(),
+            MultiplexerIndicator = string.IsNullOrWhiteSpace(request.MultiplexerIndicator)
+                ? null
+                : request.MultiplexerIndicator.Trim(),
+            StartBit = request.StartBit,
+            BitLength = request.BitLength,
+            ByteOrder = request.ByteOrder.Trim(),
+            ValueType = request.ValueType.Trim(),
+            Factor = request.Factor,
+            Offset = request.Offset,
+            Minimum = request.Minimum,
+            Maximum = request.Maximum,
+            Unit = request.Unit.Trim(),
+            Receivers = string.Empty,
+            Comment = string.IsNullOrWhiteSpace(request.Comment)
+                ? null
+                : request.Comment.Trim(),
+            SortOrder = dbcMessage.Signals.Count
+        };
+
+        dbContext.DbcSignals.Add(dbcSignal);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new UpdateDbcSignalResult
+        {
+            Signal = dbcSignal.ToResponse()
         };
     }
 
@@ -221,6 +378,45 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         };
     }
 
+    public async Task<DeleteDbcItemResult> DeleteSignalAsync(
+        Guid fileId,
+        Guid messageId,
+        Guid signalId,
+        CancellationToken cancellationToken = default)
+    {
+        var dbcSignal = await dbContext.DbcSignals
+            .Include(signal => signal.DbcMessage)
+            .SingleOrDefaultAsync(
+                signal => signal.Id == signalId
+                          && signal.DbcMessageId == messageId
+                          && signal.DbcMessage.DbcFileId == fileId,
+                cancellationToken);
+
+        if (dbcSignal is null)
+        {
+            return new DeleteDbcItemResult
+            {
+                NotFound = true
+            };
+        }
+
+        var remainingSignals = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId && signal.Id != signalId)
+            .OrderBy(signal => signal.SortOrder)
+            .ToListAsync(cancellationToken);
+
+        dbContext.DbcSignals.Remove(dbcSignal);
+
+        for (var index = 0; index < remainingSignals.Count; index++)
+        {
+            remainingSignals[index].SortOrder = index;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new DeleteDbcItemResult();
+    }
+
     private static Dictionary<string, string[]> Validate(IFormFile? file)
     {
         if (file is null)
@@ -258,6 +454,11 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         if (request.FrameId is < 0 or > uint.MaxValue)
         {
             errors["frameId"] = ["The CAN ID must be between 0 and 4294967295."];
+        }
+
+        if (request.LengthInBytes is < 0 or > short.MaxValue)
+        {
+            errors["lengthInBytes"] = ["The DLC must be between 0 and 32767."];
         }
 
         if (string.IsNullOrWhiteSpace(request.Name))
