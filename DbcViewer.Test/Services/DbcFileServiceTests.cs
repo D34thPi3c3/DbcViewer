@@ -14,7 +14,12 @@ public sealed class DbcFileServiceTests
         // Arrange
         await using var dbContext = CreateDbContext();
         var service = new DbcFileService(dbContext);
-        var fileContent = "VERSION \"1.0\"";
+        var fileContent = """
+                          VERSION "1.0"
+
+                          BO_ 256 VehicleStatus: 8 Vector__XXX
+                           SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+                          """;
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(fileContent));
         var file = new FormFile(stream, 0, stream.Length, "file", "vehicle.dbc")
         {
@@ -36,6 +41,13 @@ public sealed class DbcFileServiceTests
         Assert.Equal("application/octet-stream", savedFile.ContentType);
         Assert.Equal(stream.Length, savedFile.SizeInBytes);
         Assert.Equal(Encoding.UTF8.GetBytes(fileContent), savedFile.Content);
+        var savedMessage = Assert.Single(savedFile.Messages);
+        Assert.Equal(256, savedMessage.FrameId);
+        Assert.Equal("VehicleStatus", savedMessage.Name);
+        Assert.Equal(8, savedMessage.LengthInBytes);
+        var savedSignal = Assert.Single(savedMessage.Signals);
+        Assert.Equal("VehicleSpeed", savedSignal.Name);
+        Assert.Equal("Vector__XXX", savedSignal.Receivers);
     }
 
     [Fact]
@@ -74,18 +86,7 @@ public sealed class DbcFileServiceTests
                           SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX,Dashboard
                           SG_ EngineSpeed : 16|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
                          """;
-
-        dbContext.DbcFiles.Add(new Entities.DbcFile
-        {
-            OriginalFileName = "vehicle.dbc",
-            ContentType = "application/octet-stream",
-            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
-            Content = Encoding.UTF8.GetBytes(dbcContent),
-            UploadedAtUtc = DateTime.UtcNow
-        });
-
-        await dbContext.SaveChangesAsync();
-        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+        var fileId = await UploadDbcContentAsync(service, dbcContent);
 
         // Act
         var result = await service.GetDefinitionAsync(fileId);
@@ -135,18 +136,7 @@ public sealed class DbcFileServiceTests
                           SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
                           SG_ OilTemp : 16|8@1+ (1,0) [0|200] "°C" Vector__XXX
                          """;
-
-        dbContext.DbcFiles.Add(new Entities.DbcFile
-        {
-            OriginalFileName = "vehicle.dbc",
-            ContentType = "application/octet-stream",
-            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
-            Content = Encoding.UTF8.GetBytes(dbcContent),
-            UploadedAtUtc = DateTime.UtcNow
-        });
-
-        await dbContext.SaveChangesAsync();
-        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+        var fileId = await UploadDbcContentAsync(service, dbcContent);
 
         // Act
         var result = await service.GetDefinitionAsync(fileId);
@@ -197,18 +187,7 @@ public sealed class DbcFileServiceTests
 
                          CM_ SG_ 256 VehicleSpeed "Current vehicle speed";
                          """;
-
-        dbContext.DbcFiles.Add(new Entities.DbcFile
-        {
-            OriginalFileName = "vehicle.dbc",
-            ContentType = "application/octet-stream",
-            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
-            Content = Encoding.UTF8.GetBytes(dbcContent),
-            UploadedAtUtc = DateTime.UtcNow
-        });
-
-        await dbContext.SaveChangesAsync();
-        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+        var fileId = await UploadDbcContentAsync(service, dbcContent);
 
         // Act
         var result = await service.GetDefinitionAsync(fileId);
@@ -238,18 +217,7 @@ public sealed class DbcFileServiceTests
                          SIG_VALTYPE_ 256 Temperature : 1;
                          SIG_VALTYPE_ 256 Pressure : 2;
                          """;
-
-        dbContext.DbcFiles.Add(new Entities.DbcFile
-        {
-            OriginalFileName = "vehicle.dbc",
-            ContentType = "application/octet-stream",
-            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
-            Content = Encoding.UTF8.GetBytes(dbcContent),
-            UploadedAtUtc = DateTime.UtcNow
-        });
-
-        await dbContext.SaveChangesAsync();
-        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+        var fileId = await UploadDbcContentAsync(service, dbcContent);
 
         // Act
         var result = await service.GetDefinitionAsync(fileId);
@@ -264,7 +232,29 @@ public sealed class DbcFileServiceTests
     }
 
     [Fact]
-    public async Task GetDefinitionAsync_ReturnsError_WhenStoredContentCannotBeParsed()
+    public async Task UploadAsync_ReturnsError_WhenDbcContentCannotBeParsed()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("not a dbc file"));
+        var file = new FormFile(stream, 0, stream.Length, "file", "invalid.dbc")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "application/octet-stream"
+        };
+
+        // Act
+        var result = await service.UploadAsync(file);
+
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.Contains("file", result.Errors.Keys);
+        Assert.Empty(dbContext.DbcFiles);
+    }
+
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsError_WhenFileHasNoNormalizedMessages()
     {
         // Arrange
         await using var dbContext = CreateDbContext();
@@ -272,10 +262,10 @@ public sealed class DbcFileServiceTests
 
         dbContext.DbcFiles.Add(new Entities.DbcFile
         {
-            OriginalFileName = "invalid.dbc",
+            OriginalFileName = "legacy.dbc",
             ContentType = "application/octet-stream",
             SizeInBytes = 12,
-            Content = Encoding.UTF8.GetBytes("not a dbc file"),
+            Content = Encoding.UTF8.GetBytes("legacy content"),
             UploadedAtUtc = DateTime.UtcNow
         });
 
@@ -299,5 +289,22 @@ public sealed class DbcFileServiceTests
             .Options;
 
         return new AppDbContext(options);
+    }
+
+    private static async Task<Guid> UploadDbcContentAsync(DbcFileService service, string dbcContent)
+    {
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(dbcContent));
+        var file = new FormFile(stream, 0, stream.Length, "file", "vehicle.dbc")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "application/octet-stream"
+        };
+
+        var result = await service.UploadAsync(file);
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.File);
+
+        return result.File!.Id;
     }
 }

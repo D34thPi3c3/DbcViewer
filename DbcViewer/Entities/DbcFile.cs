@@ -8,4 +8,5 @@ public sealed class DbcFile
     public long SizeInBytes { get; set; }
     public byte[] Content { get; set; } = [];
     public DateTime UploadedAtUtc { get; set; } = DateTime.UtcNow;
+    public ICollection<DbcMessage> Messages { get; set; } = [];
 }

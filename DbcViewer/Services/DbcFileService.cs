@@ -22,6 +22,23 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
 
         await using var memoryStream = new MemoryStream();
         await file!.CopyToAsync(memoryStream, cancellationToken);
+        var content = memoryStream.ToArray();
+
+        IReadOnlyList<Contracts.DbcFiles.DbcMessageResponse> parsedMessages;
+        try
+        {
+            parsedMessages = DbcDefinitionParser.Parse(content);
+        }
+        catch (FormatException)
+        {
+            return new UploadDbcFileResult
+            {
+                Errors = new Dictionary<string, string[]>
+                {
+                    ["file"] = ["The uploaded DBC file could not be parsed into messages and signals."]
+                }
+            };
+        }
 
         var dbcFile = new DbcFile
         {
@@ -30,9 +47,15 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
                 ? "application/octet-stream"
                 : file.ContentType,
             SizeInBytes = file.Length,
-            Content = memoryStream.ToArray(),
-            UploadedAtUtc = DateTime.UtcNow
+            Content = content,
+            UploadedAtUtc = DateTime.UtcNow,
+            Messages = parsedMessages.ToEntities(dbcFileId: Guid.NewGuid())
         };
+
+        foreach (var message in dbcFile.Messages)
+        {
+            message.DbcFileId = dbcFile.Id;
+        }
 
         dbContext.DbcFiles.Add(dbcFile);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -49,6 +72,8 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
     {
         var dbcFile = await dbContext.DbcFiles
             .AsNoTracking()
+            .Include(file => file.Messages.OrderBy(message => message.SortOrder))
+            .ThenInclude(message => message.Signals.OrderBy(signal => signal.SortOrder))
             .SingleOrDefaultAsync(file => file.Id == fileId, cancellationToken);
 
         if (dbcFile is null)
@@ -59,25 +84,21 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
             };
         }
 
-        try
-        {
-            var messages = DbcDefinitionParser.Parse(dbcFile.Content);
-
-            return new GetDbcDefinitionResult
-            {
-                Definition = dbcFile.ToDefinitionResponse(messages)
-            };
-        }
-        catch (FormatException)
+        if (dbcFile.Messages.Count == 0)
         {
             return new GetDbcDefinitionResult
             {
                 Errors = new Dictionary<string, string[]>
                 {
-                    ["file"] = ["The stored DBC file could not be parsed into messages and signals."]
+                    ["file"] = ["The stored DBC definition does not contain any normalized messages."]
                 }
             };
         }
+
+        return new GetDbcDefinitionResult
+        {
+            Definition = dbcFile.ToDefinitionResponse()
+        };
     }
 
     private static Dictionary<string, string[]> Validate(IFormFile? file)

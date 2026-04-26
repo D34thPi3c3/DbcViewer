@@ -1,11 +1,15 @@
 import {
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
+  Typography,
 } from '@mui/material'
+import { useMemo, useState } from 'react'
 import type { DbcMessageResponse } from '../../../types/dbcFiles'
 
 type DbcMessagesTableProps = {
@@ -15,52 +19,95 @@ type DbcMessagesTableProps = {
 }
 
 export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessage }: DbcMessagesTableProps) {
-  return (
-    <TableContainer
-      sx={{
-        maxHeight: { xs: 360, md: 520 },
-        overflow: 'auto',
-        borderRadius: 0,
-      }}
-    >
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>ID</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>DLC</TableCell>
-            <TableCell>Sender</TableCell>
-            <TableCell align="right">Signale</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {messages.map((message, index) => {
-            const isSelected = index === selectedMessageIndex
+  const [searchValue, setSearchValue] = useState('')
 
-            return (
-              <TableRow
-                key={`${message.frameId}:${message.name}:${index}`}
-                hover
-                selected={isSelected}
-                onClick={() => onSelectMessage(index)}
-                sx={{
-                  cursor: 'pointer',
-                  '& .MuiTableCell-root': {
-                    borderColor: 'rgba(0, 105, 92, 0.08)',
-                  },
-                }}
-              >
-                <TableCell>{formatFrameId(message.frameId)}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{message.name}</TableCell>
-                <TableCell>{message.lengthInBytes}</TableCell>
-                <TableCell>{message.transmitter}</TableCell>
-                <TableCell align="right">{message.signals.length}</TableCell>
+  const filteredMessages = useMemo(() => {
+    const normalizedQuery = searchValue.trim().toLowerCase()
+
+    if (!normalizedQuery) {
+      return messages.map((message, index) => ({ message, index }))
+    }
+
+    return messages
+      .map((message, index) => ({ message, index }))
+      .filter(({ message }) => {
+        const frameIdHex = formatFrameId(message.frameId).toLowerCase()
+        const frameIdDecimal = message.frameId.toString()
+
+        return [
+          frameIdHex,
+          frameIdDecimal,
+          message.name.toLowerCase(),
+          message.lengthInBytes.toString(),
+          message.transmitter.toLowerCase(),
+        ].some((value) => value.includes(normalizedQuery))
+      })
+  }, [messages, searchValue])
+
+  return (
+    <Stack spacing={2}>
+      <TextField
+        size="small"
+        label="Nachrichten suchen"
+        placeholder="ID, Name, DLC oder Sender"
+        value={searchValue}
+        onChange={(event) => setSearchValue(event.target.value)}
+      />
+
+      <TableContainer
+        sx={{
+          maxHeight: { xs: 360, md: 520 },
+          overflow: 'auto',
+          borderRadius: 0,
+        }}
+      >
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell>DLC</TableCell>
+              <TableCell>Sender</TableCell>
+              <TableCell align="right">Signale</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredMessages.length > 0 ? (
+              filteredMessages.map(({ message, index }) => {
+                const isSelected = index === selectedMessageIndex
+
+                return (
+                  <TableRow
+                    key={`${message.frameId}:${message.name}:${index}`}
+                    hover
+                    selected={isSelected}
+                    onClick={() => onSelectMessage(index)}
+                    sx={{
+                      cursor: 'pointer',
+                      '& .MuiTableCell-root': {
+                        borderColor: 'rgba(0, 105, 92, 0.08)',
+                      },
+                    }}
+                  >
+                    <TableCell>{formatFrameId(message.frameId)}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{message.name}</TableCell>
+                    <TableCell>{message.lengthInBytes}</TableCell>
+                    <TableCell>{message.transmitter}</TableCell>
+                    <TableCell align="right">{message.signals.length}</TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <Typography color="text.secondary">Keine Nachrichten zur Suche gefunden.</Typography>
+                </TableCell>
               </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
   )
 }
 

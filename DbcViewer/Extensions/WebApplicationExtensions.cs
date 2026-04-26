@@ -37,6 +37,41 @@ public static class WebApplicationExtensions
                 "Content" bytea NOT NULL,
                 "UploadedAtUtc" timestamp with time zone NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS dbc_messages (
+                "Id" uuid PRIMARY KEY,
+                "DbcFileId" uuid NOT NULL REFERENCES dbc_files("Id") ON DELETE CASCADE,
+                "FrameId" integer NOT NULL,
+                "Name" character varying(255) NOT NULL,
+                "LengthInBytes" smallint NOT NULL,
+                "Transmitter" character varying(255) NOT NULL,
+                "SortOrder" integer NOT NULL,
+                CONSTRAINT "UX_dbc_messages_DbcFileId_FrameId" UNIQUE ("DbcFileId", "FrameId"),
+                CONSTRAINT "UX_dbc_messages_DbcFileId_SortOrder" UNIQUE ("DbcFileId", "SortOrder")
+            );
+
+            CREATE TABLE IF NOT EXISTS dbc_signals (
+                "Id" uuid PRIMARY KEY,
+                "DbcMessageId" uuid NOT NULL REFERENCES dbc_messages("Id") ON DELETE CASCADE,
+                "Name" character varying(255) NOT NULL,
+                "MultiplexerIndicator" character varying(50) NULL,
+                "StartBit" integer NOT NULL,
+                "BitLength" integer NOT NULL,
+                "ByteOrder" character varying(32) NOT NULL,
+                "ValueType" character varying(32) NOT NULL,
+                "Factor" double precision NOT NULL,
+                "Offset" double precision NOT NULL,
+                "Minimum" double precision NOT NULL,
+                "Maximum" double precision NOT NULL,
+                "Unit" character varying(100) NOT NULL,
+                "Receivers" text NOT NULL,
+                "Comment" text NULL,
+                "SortOrder" integer NOT NULL,
+                CONSTRAINT "UX_dbc_signals_DbcMessageId_SortOrder" UNIQUE ("DbcMessageId", "SortOrder")
+            );
+
+            CREATE INDEX IF NOT EXISTS "IX_dbc_signals_DbcMessageId_Name"
+                ON dbc_signals ("DbcMessageId", "Name");
             """);
     }
 }
