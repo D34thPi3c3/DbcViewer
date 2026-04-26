@@ -107,6 +107,7 @@ public sealed class DbcFileServiceTests
         Assert.Equal(2, message.Signals.Count);
 
         var firstSignal = message.Signals[0];
+        Assert.NotEqual(Guid.Empty, firstSignal.Id);
         Assert.Equal("VehicleSpeed", firstSignal.Name);
         Assert.Null(firstSignal.MultiplexerIndicator);
         Assert.Equal(0, firstSignal.StartBit);
@@ -354,6 +355,124 @@ public sealed class DbcFileServiceTests
         Assert.True(result.NotFound);
         Assert.False(result.Succeeded);
         Assert.Null(result.Message);
+    }
+
+    [Fact]
+    public async Task UpdateSignalAsync_UpdatesEditableSignalFields()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .Select(message => message.Id)
+            .SingleAsync();
+        var signalId = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId)
+            .Select(signal => signal.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.UpdateSignalAsync(
+            fileId,
+            messageId,
+            signalId,
+            new UpdateDbcSignalRequest(
+                "VehicleSpeedFiltered",
+                "m1",
+                8,
+                12,
+                "big-endian",
+                "signed",
+                2.5,
+                1.25,
+                -10,
+                500,
+                "mph",
+                "Adjusted in editor"));
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Signal);
+        Assert.Equal("VehicleSpeedFiltered", result.Signal!.Name);
+        Assert.Equal("m1", result.Signal.MultiplexerIndicator);
+        Assert.Equal(8, result.Signal.StartBit);
+        Assert.Equal(12, result.Signal.BitLength);
+        Assert.Equal("big-endian", result.Signal.ByteOrder);
+        Assert.Equal("signed", result.Signal.ValueType);
+        Assert.Equal(2.5, result.Signal.Factor);
+        Assert.Equal(1.25, result.Signal.Offset);
+        Assert.Equal(-10, result.Signal.Minimum);
+        Assert.Equal(500, result.Signal.Maximum);
+        Assert.Equal("mph", result.Signal.Unit);
+        Assert.Equal("Adjusted in editor", result.Signal.Comment);
+
+        var savedSignal = await dbContext.DbcSignals.SingleAsync(signal => signal.Id == signalId);
+        Assert.Equal("VehicleSpeedFiltered", savedSignal.Name);
+        Assert.Equal("m1", savedSignal.MultiplexerIndicator);
+        Assert.Equal(8, savedSignal.StartBit);
+        Assert.Equal(12, savedSignal.BitLength);
+    }
+
+    [Fact]
+    public async Task UpdateSignalAsync_ReturnsError_WhenSignalPayloadIsInvalid()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .Select(message => message.Id)
+            .SingleAsync();
+        var signalId = await dbContext.DbcSignals
+            .Where(signal => signal.DbcMessageId == messageId)
+            .Select(signal => signal.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.UpdateSignalAsync(
+            fileId,
+            messageId,
+            signalId,
+            new UpdateDbcSignalRequest(
+                "",
+                "mx",
+                -1,
+                0,
+                "middle-endian",
+                "custom",
+                1,
+                0,
+                0,
+                1,
+                new string('u', 101),
+                null));
+
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.Contains("name", result.Errors.Keys);
+        Assert.Contains("multiplexerIndicator", result.Errors.Keys);
+        Assert.Contains("startBit", result.Errors.Keys);
+        Assert.Contains("bitLength", result.Errors.Keys);
+        Assert.Contains("byteOrder", result.Errors.Keys);
+        Assert.Contains("valueType", result.Errors.Keys);
+        Assert.Contains("unit", result.Errors.Keys);
     }
 
     [Fact]

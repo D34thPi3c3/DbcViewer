@@ -1,7 +1,6 @@
 namespace DbcViewer.Contracts.DbcFiles;
 
-public sealed record DbcSignalResponse(
-    Guid Id,
+public sealed record UpdateDbcSignalRequest(
     string Name,
     string? MultiplexerIndicator,
     int StartBit,
@@ -13,5 +12,4 @@ public sealed record DbcSignalResponse(
     double Minimum,
     double Maximum,
     string Unit,
-    IReadOnlyList<string> Receivers,
     string? Comment);

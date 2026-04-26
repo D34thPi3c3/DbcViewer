@@ -1,23 +1,21 @@
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import EditRoundedIcon from '@mui/icons-material/EditRounded'
-import {
-  Alert,
-  IconButton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableSortLabel,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material'
+import { Alert, Box, Stack, TextField } from '@mui/material'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import {
+  DataGrid,
+  GridActionsCellItem,
+  GridRowEditStopReasons,
+  GridRowModes,
+  type GridColDef,
+  type GridEventListener,
+  type GridRenderEditCellParams,
+  type GridRowModesModel,
+  type GridRowModel,
+} from '@mui/x-data-grid'
 import type { DbcDefinitionResponse, DbcMessageResponse } from '../../../types/dbcFiles'
 import { updateDbcMessage } from '../api/updateDbcMessage'
 
@@ -28,8 +26,15 @@ type DbcMessagesTableProps = {
   onSelectMessage: (index: number) => void
 }
 
-type SortColumn = 'frameId' | 'name' | 'lengthInBytes' | 'transmitter' | 'signalCount'
-type SortDirection = 'asc' | 'desc'
+type DbcMessageGridRow = {
+  id: string
+  frameId: number | string
+  name: string
+  lengthInBytes: number
+  transmitter: string
+  signalCount: number
+  originalIndex: number
+}
 
 export function DbcMessagesTable({
   fileId,
@@ -39,37 +44,57 @@ export function DbcMessagesTable({
 }: DbcMessagesTableProps) {
   const queryClient = useQueryClient()
   const [searchValue, setSearchValue] = useState('')
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
-  const [frameIdValue, setFrameIdValue] = useState('')
-  const [nameValue, setNameValue] = useState('')
-  const [transmitterValue, setTransmitterValue] = useState('')
-  const [sortColumn, setSortColumn] = useState<SortColumn>('frameId')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [rowModesModel, setRowModesModel] = useState<GridRowModesModel>({})
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const filteredMessages = useMemo(() => {
-    const normalizedQuery = searchValue.trim().toLowerCase()
-    const mappedMessages = messages.map((message, index) => ({ message, index }))
+  const selectedMessageId = messages[selectedMessageIndex]?.id ?? null
 
-    const visibleMessages = !normalizedQuery
-      ? mappedMessages
-      : mappedMessages.filter(({ message }) => {
-        const frameIdHex = formatFrameId(message.frameId).toLowerCase()
-        const frameIdDecimal = message.frameId.toString()
+  const visibleRows = useMemo<DbcMessageGridRow[]>(() => {
+    const normalizedQuery = searchValue.trim().toLowerCase()
+
+    return messages
+      .map((message, index) => ({
+        id: message.id,
+        frameId: message.frameId,
+        name: message.name,
+        lengthInBytes: message.lengthInBytes,
+        transmitter: message.transmitter,
+        signalCount: message.signals.length,
+        originalIndex: index,
+      }))
+      .filter((message) => {
+        if (!normalizedQuery) {
+          return true
+        }
 
         return [
-          frameIdHex,
-          frameIdDecimal,
+          formatFrameIdValue(message.frameId).toLowerCase(),
+          String(message.frameId),
           message.name.toLowerCase(),
-          message.lengthInBytes.toString(),
+          String(message.lengthInBytes),
           message.transmitter.toLowerCase(),
+          String(message.signalCount),
         ].some((value) => value.includes(normalizedQuery))
       })
-    
-    return visibleMessages
-      .sort((left, right) => compareMessages(left.message, right.message, sortColumn, sortDirection))
-  }, [messages, searchValue, sortColumn, sortDirection])
+  }, [messages, searchValue])
+
+  useEffect(() => {
+    setRowModesModel((currentModel) => {
+      const nextModel = { ...currentModel }
+      let hasChanges = false
+
+      Object.keys(nextModel).forEach((rowId) => {
+        const rowStillVisible = visibleRows.some((row) => row.id === rowId)
+        if (!rowStillVisible) {
+          delete nextModel[rowId]
+          hasChanges = true
+        }
+      })
+
+      return hasChanges ? nextModel : currentModel
+    })
+  }, [visibleRows])
 
   const updateMutation = useMutation<
     DbcMessageResponse,
@@ -105,10 +130,6 @@ export function DbcMessagesTable({
         }
       })
 
-      setEditingMessageId(null)
-      setFrameIdValue('')
-      setNameValue('')
-      setTransmitterValue('')
       setFeedbackMessage('Nachricht gespeichert.')
       setErrorMessage(null)
     },
@@ -118,53 +139,165 @@ export function DbcMessagesTable({
     },
   })
 
-  function startEditing(message: DbcMessageResponse, index: number) {
-    onSelectMessage(index)
-    setEditingMessageId(message.id)
-    setFrameIdValue(formatFrameId(message.frameId))
-    setNameValue(message.name)
-    setTransmitterValue(message.transmitter)
-    setFeedbackMessage(null)
-    setErrorMessage(null)
-  }
+  const columns = useMemo<GridColDef<DbcMessageGridRow>[]>(
+    () => [
+      {
+        field: 'frameId',
+        headerName: 'ID',
+        flex: 0.9,
+        minWidth: 140,
+        editable: true,
+        sortComparator: (left, right) => Number(left) - Number(right),
+        valueFormatter: (value) => formatFrameIdValue(value),
+        renderEditCell: (params) => (
+          <StandardEditInputCell
+            {...params}
+            initialValueFormatter={(value) => formatFrameIdValue(value)}
+            placeholder="0x100"
+          />
+        ),
+        preProcessEditCellProps: ({ props }) => ({
+          ...props,
+          error: parseFrameIdInput(String(props.value ?? '')) === null,
+        }),
+      },
+      {
+        field: 'name',
+        headerName: 'Name',
+        flex: 1.3,
+        minWidth: 220,
+        editable: true,
+        preProcessEditCellProps: ({ props }) => ({
+          ...props,
+          error: !String(props.value ?? '').trim(),
+        }),
+      },
+      {
+        field: 'lengthInBytes',
+        headerName: 'DLC',
+        flex: 0.6,
+        minWidth: 90,
+        editable: false,
+        type: 'number',
+      },
+      {
+        field: 'transmitter',
+        headerName: 'Sender',
+        flex: 1.1,
+        minWidth: 180,
+        editable: true,
+        preProcessEditCellProps: ({ props }) => ({
+          ...props,
+          error: !String(props.value ?? '').trim(),
+        }),
+      },
+      {
+        field: 'signalCount',
+        headerName: 'Signale',
+        flex: 0.7,
+        minWidth: 110,
+        editable: false,
+        type: 'number',
+        align: 'right',
+        headerAlign: 'right',
+      },
+      {
+        field: 'actions',
+        type: 'actions',
+        headerName: 'Aktion',
+        minWidth: 100,
+        getActions: ({ id }) => {
+          const isEditing = rowModesModel[id]?.mode === GridRowModes.Edit
 
-  function cancelEditing() {
-    setEditingMessageId(null)
-    setFrameIdValue('')
-    setNameValue('')
-    setTransmitterValue('')
-    setFeedbackMessage(null)
-    setErrorMessage(null)
-  }
+          if (isEditing) {
+            return [
+              <GridActionsCellItem
+                key="save"
+                icon={<CheckRoundedIcon fontSize="small" />}
+                label="Speichern"
+                onClick={() => {
+                  setRowModesModel((currentModel) => ({
+                    ...currentModel,
+                    [id]: { mode: GridRowModes.View },
+                  }))
+                }}
+                color="inherit"
+              />,
+              <GridActionsCellItem
+                key="cancel"
+                icon={<CloseRoundedIcon fontSize="small" />}
+                label="Abbrechen"
+                onClick={() => {
+                  setRowModesModel((currentModel) => ({
+                    ...currentModel,
+                    [id]: { mode: GridRowModes.View, ignoreModifications: true },
+                  }))
+                }}
+                color="inherit"
+              />,
+            ]
+          }
 
-  async function saveEditing(message: DbcMessageResponse) {
-    if (editingMessageId !== message.id) {
-      return
+          return [
+            <GridActionsCellItem
+              key="edit"
+              icon={<EditRoundedIcon fontSize="small" />}
+              label="Bearbeiten"
+              onClick={() => {
+                setRowModesModel((currentModel) => ({
+                  ...currentModel,
+                  [id]: { mode: GridRowModes.Edit },
+                }))
+              }}
+              color="inherit"
+            />,
+          ]
+        },
+      },
+    ],
+    [rowModesModel],
+  )
+
+  const handleRowEditStop: GridEventListener<'rowEditStop'> = (params, event) => {
+    if (params.reason === GridRowEditStopReasons.rowFocusOut) {
+      event.defaultMuiPrevented = true
     }
+  }
 
-    const parsedFrameId = parseFrameIdInput(frameIdValue)
+  async function processRowUpdate(
+    updatedRow: GridRowModel<DbcMessageGridRow>,
+    originalRow: GridRowModel<DbcMessageGridRow>,
+  ) {
+    const parsedFrameId = parseFrameIdInput(String(updatedRow.frameId))
+    const nextName = String(updatedRow.name ?? '').trim()
+    const nextTransmitter = String(updatedRow.transmitter ?? '').trim()
+
     if (parsedFrameId === null) {
-      setFeedbackMessage(null)
-      setErrorMessage('CAN_Id muss hexadezimal mit 0x-Präfix oder dezimal angegeben werden.')
-      return
+      throw new Error('CAN_Id muss hexadezimal mit 0x-Präfix oder dezimal angegeben werden.')
     }
 
-    await updateMutation.mutateAsync({
-      messageId: message.id,
+    if (!nextName) {
+      throw new Error('Name darf nicht leer sein.')
+    }
+
+    if (!nextTransmitter) {
+      throw new Error('Sender darf nicht leer sein.')
+    }
+
+    const savedMessage = await updateMutation.mutateAsync({
+      messageId: updatedRow.id,
       frameId: parsedFrameId,
-      name: nameValue,
-      transmitter: transmitterValue,
+      name: nextName,
+      transmitter: nextTransmitter,
     })
-  }
 
-  function handleSort(column: SortColumn) {
-    if (sortColumn === column) {
-      setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
-      return
+    return {
+      ...originalRow,
+      frameId: savedMessage.frameId,
+      name: savedMessage.name,
+      transmitter: savedMessage.transmitter,
+      signalCount: savedMessage.signals.length,
     }
-
-    setSortColumn(column)
-    setSortDirection('asc')
   }
 
   return (
@@ -180,307 +313,143 @@ export function DbcMessagesTable({
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
       {feedbackMessage ? <Alert severity="success">{feedbackMessage}</Alert> : null}
 
-      <TableContainer
+      <Box
         sx={{
-          maxHeight: { xs: 360, md: 520 },
-          overflow: 'hidden',
+          height: { xs: 420, md: 560 },
           borderRadius: '18px',
           border: '1px solid rgba(0, 105, 92, 0.12)',
           bgcolor: 'rgba(255, 255, 255, 0.72)',
+          overflow: 'hidden',
         }}
       >
-        <Table
-          size="small"
-          stickyHeader
+        <DataGrid
+          rows={visibleRows}
+          columns={columns}
+          editMode="row"
+          rowModesModel={rowModesModel}
+          onRowModesModelChange={setRowModesModel}
+          onRowEditStop={handleRowEditStop}
+          processRowUpdate={processRowUpdate}
+          onProcessRowUpdateError={(error) => setErrorMessage(error.message)}
+          disableRowSelectionOnClick
+          hideFooter
+          loading={updateMutation.isPending}
+          onRowClick={(params) => {
+            onSelectMessage(params.row.originalIndex)
+          }}
+          getRowClassName={(params) =>
+            params.row.id === selectedMessageId ? 'dbc-message-row-selected' : ''
+          }
           sx={{
-            '& .MuiTableCell-head': {
+            border: 'none',
+            '--DataGrid-overlayHeight': '160px',
+            '& .MuiDataGrid-columnHeaders': {
               bgcolor: 'rgba(244, 239, 230, 0.96)',
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
               fontWeight: 700,
             },
+            '& .MuiDataGrid-cell': {
+              borderColor: 'rgba(0, 105, 92, 0.08)',
+              alignItems: 'center',
+            },
+            '& .MuiDataGrid-row:hover': {
+              bgcolor: 'rgba(0, 105, 92, 0.04)',
+            },
+            '& .dbc-message-row-selected': {
+              bgcolor: 'rgba(0, 105, 92, 0.08)',
+            },
+            '& .dbc-message-row-selected:hover': {
+              bgcolor: 'rgba(0, 105, 92, 0.12)',
+            },
+            '& .MuiDataGrid-row.MuiDataGrid-row--editing': {
+              boxShadow: 'none',
+              bgcolor: 'rgba(255, 250, 244, 0.92)',
+            },
+            '& .MuiDataGrid-cell--editing': {
+              px: 1,
+              boxShadow: 'none',
+              bgcolor: 'transparent',
+            },
+            '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+              outline: 'none',
+            },
+            '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+              outline: 'none',
+            },
           }}
-        >
-          <TableHead>
-            <TableRow>
-              <TableCell sortDirection={sortColumn === 'frameId' ? sortDirection : false}>
-                <TableSortLabel
-                  active={sortColumn === 'frameId'}
-                  direction={sortColumn === 'frameId' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('frameId')}
-                >
-                  ID
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sortColumn === 'name' ? sortDirection : false}>
-                <TableSortLabel
-                  active={sortColumn === 'name'}
-                  direction={sortColumn === 'name' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('name')}
-                >
-                  Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sortColumn === 'lengthInBytes' ? sortDirection : false}>
-                <TableSortLabel
-                  active={sortColumn === 'lengthInBytes'}
-                  direction={sortColumn === 'lengthInBytes' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('lengthInBytes')}
-                >
-                  DLC
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sortColumn === 'transmitter' ? sortDirection : false}>
-                <TableSortLabel
-                  active={sortColumn === 'transmitter'}
-                  direction={sortColumn === 'transmitter' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('transmitter')}
-                >
-                  Sender
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right" sortDirection={sortColumn === 'signalCount' ? sortDirection : false}>
-                <TableSortLabel
-                  active={sortColumn === 'signalCount'}
-                  direction={sortColumn === 'signalCount' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('signalCount')}
-                >
-                  Signale
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Aktion</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredMessages.length > 0 ? (
-              filteredMessages.map(({ message, index }) => {
-                const isSelected = index === selectedMessageIndex
-                const isEditing = message.id === editingMessageId
-
-                return (
-                  <TableRow
-                    key={message.id}
-                    hover
-                    selected={isSelected}
-                    onClick={() => onSelectMessage(index)}
-                    sx={{
-                      transition: 'background-color 160ms ease',
-                      '&:last-child .MuiTableCell-root': {
-                        borderBottom: 'none',
-                      },
-                      '& .MuiTableCell-root': {
-                        borderColor: 'rgba(0, 105, 92, 0.08)',
-                      },
-                    }}
-                  >
-                    <TableCell
-                      sx={{ minWidth: 150 }}
-                      onDoubleClick={() => {
-                        if (!isEditing) {
-                          startEditing(message, index)
-                        }
-                      }}
-                    >
-                      {isEditing ? (
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          autoFocus
-                          value={frameIdValue}
-                          onChange={(event) => setFrameIdValue(event.target.value)}
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void saveEditing(message)
-                            }
-
-                            if (event.key === 'Escape') {
-                              event.preventDefault()
-                              cancelEditing()
-                            }
-                          }}
-                          placeholder="0x100"
-                          fullWidth
-                          sx={{
-                            '& .MuiInputBase-root': {
-                              borderRadius: 0,
-                            },
-                          }}
-                        />
-                      ) : (
-                        formatFrameId(message.frameId)
-                      )}
-                    </TableCell>
-                    <TableCell
-                      sx={{ minWidth: 220, fontWeight: 700 }}
-                      onDoubleClick={() => {
-                        if (!isEditing) {
-                          startEditing(message, index)
-                        }
-                      }}
-                    >
-                      {isEditing ? (
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          value={nameValue}
-                          onChange={(event) => setNameValue(event.target.value)}
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void saveEditing(message)
-                            }
-
-                            if (event.key === 'Escape') {
-                              event.preventDefault()
-                              cancelEditing()
-                            }
-                          }}
-                          fullWidth
-                          sx={{
-                            '& .MuiInputBase-root': {
-                              borderRadius: 0,
-                            },
-                          }}
-                        />
-                      ) : (
-                        message.name
-                      )}
-                    </TableCell>
-                    <TableCell>{message.lengthInBytes}</TableCell>
-                    <TableCell
-                      sx={{ minWidth: 200 }}
-                      onDoubleClick={() => {
-                        if (!isEditing) {
-                          startEditing(message, index)
-                        }
-                      }}
-                    >
-                      {isEditing ? (
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          value={transmitterValue}
-                          onChange={(event) => setTransmitterValue(event.target.value)}
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void saveEditing(message)
-                            }
-
-                            if (event.key === 'Escape') {
-                              event.preventDefault()
-                              cancelEditing()
-                            }
-                          }}
-                          fullWidth
-                          sx={{
-                            '& .MuiInputBase-root': {
-                              borderRadius: 0,
-                            },
-                          }}
-                        />
-                      ) : (
-                        message.transmitter
-                      )}
-                    </TableCell>
-                    <TableCell align="right">{message.signals.length}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      {isEditing ? (
-                        <Stack direction="row" spacing={0.5}>
-                          <Tooltip title="Speichern">
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="success"
-                                disabled={updateMutation.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  void saveEditing(message)
-                                }}
-                              >
-                                <CheckRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Abbrechen">
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                disabled={updateMutation.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  cancelEditing()
-                                }}
-                              >
-                                <CloseRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Stack>
-                      ) : (
-                        <Tooltip title="Gesamte Zeile bearbeiten">
-                          <IconButton
-                            size="small"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              startEditing(message, index)
-                            }}
-                          >
-                            <EditRoundedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary">Keine Nachrichten zur Suche gefunden.</Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        />
+      </Box>
     </Stack>
   )
 }
 
-function formatFrameId(frameId: number) {
-  return `0x${frameId.toString(16).toUpperCase().padStart(3, '0')}`
+type StandardEditInputCellProps = GridRenderEditCellParams<DbcMessageGridRow> & {
+  initialValueFormatter?: (value: unknown) => string
+  placeholder?: string
 }
 
-function compareMessages(
-  left: DbcMessageResponse,
-  right: DbcMessageResponse,
-  sortColumn: SortColumn,
-  sortDirection: SortDirection,
-) {
-  const comparison = (() => {
-    switch (sortColumn) {
-      case 'frameId':
-        return left.frameId - right.frameId
-      case 'name':
-        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-      case 'lengthInBytes':
-        return left.lengthInBytes - right.lengthInBytes
-      case 'transmitter':
-        return left.transmitter.localeCompare(right.transmitter, undefined, { sensitivity: 'base' })
-      case 'signalCount':
-        return left.signals.length - right.signals.length
-    }
-  })()
+function StandardEditInputCell({
+  api,
+  field,
+  hasFocus,
+  id,
+  initialValueFormatter,
+  placeholder,
+  value,
+}: StandardEditInputCellProps) {
+  const formattedValue = initialValueFormatter
+    ? initialValueFormatter(value)
+    : String(value ?? '')
+  const [localValue, setLocalValue] = useState(formattedValue)
 
-  if (comparison !== 0) {
-    return sortDirection === 'asc' ? comparison : -comparison
+  useEffect(() => {
+    setLocalValue(formattedValue)
+  }, [formattedValue])
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextValue = event.target.value
+    setLocalValue(nextValue)
+    void api.setEditCellValue({ id, field, value: nextValue }, event)
   }
 
-  return left.frameId - right.frameId
+  return (
+    <TextField
+      size="small"
+      variant="standard"
+      value={localValue}
+      onChange={handleChange}
+      autoFocus={hasFocus}
+      placeholder={placeholder}
+      fullWidth
+      slotProps={{
+        input: {
+          disableUnderline: true,
+        },
+      }}
+      onClick={(event) => event.stopPropagation()}
+      sx={{
+        '& .MuiInputBase-root': {
+          borderRadius: 0,
+        },
+      }}
+    />
+  )
+}
+
+function formatFrameIdValue(frameId: unknown) {
+  const numericValue =
+    typeof frameId === 'number'
+      ? frameId
+      : typeof frameId === 'string'
+        ? parseFrameIdInput(frameId)
+        : null
+
+  if (numericValue === null) {
+    return String(frameId ?? '')
+  }
+
+  return `0x${numericValue.toString(16).toUpperCase().padStart(3, '0')}`
 }
 
 function parseFrameIdInput(value: string): number | null {

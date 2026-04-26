@@ -55,7 +55,7 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
               : 'Noch keine Nachricht ausgewählt.'
           }
         >
-          <DbcSignalsTable message={selectedMessage} />
+          <DbcSignalsTable fileId={definition.fileId} message={selectedMessage} />
         </DefinitionTableCard>
       </Stack>
     </Stack>

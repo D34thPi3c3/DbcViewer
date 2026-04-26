@@ -65,4 +65,27 @@ public sealed class DbcFilesController(IDbcFileService dbcFileService) : Control
 
         return Ok(result.Message);
     }
+
+    [HttpPut("{fileId:guid}/messages/{messageId:guid}/signals/{signalId:guid}")]
+    public async Task<ActionResult<DbcSignalResponse>> UpdateSignal(
+        Guid fileId,
+        Guid messageId,
+        Guid signalId,
+        [FromBody] UpdateDbcSignalRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await dbcFileService.UpdateSignalAsync(fileId, messageId, signalId, request, cancellationToken);
+
+        if (result.NotFound)
+        {
+            return NotFound();
+        }
+
+        if (!result.Succeeded)
+        {
+            return ValidationProblem(new ValidationProblemDetails(result.Errors));
+        }
+
+        return Ok(result.Signal);
+    }
 }

@@ -13,4 +13,10 @@ public interface IDbcFileService
         Guid messageId,
         UpdateDbcMessageRequest request,
         CancellationToken cancellationToken = default);
+    Task<UpdateDbcSignalResult> UpdateSignalAsync(
+        Guid fileId,
+        Guid messageId,
+        Guid signalId,
+        UpdateDbcSignalRequest request,
+        CancellationToken cancellationToken = default);
 }

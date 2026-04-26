@@ -164,6 +164,63 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         };
     }
 
+    public async Task<UpdateDbcSignalResult> UpdateSignalAsync(
+        Guid fileId,
+        Guid messageId,
+        Guid signalId,
+        UpdateDbcSignalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationErrors = Validate(request);
+        if (validationErrors.Count > 0)
+        {
+            return new UpdateDbcSignalResult
+            {
+                Errors = validationErrors
+            };
+        }
+
+        var dbcSignal = await dbContext.DbcSignals
+            .Include(signal => signal.DbcMessage)
+            .SingleOrDefaultAsync(
+                signal => signal.Id == signalId
+                          && signal.DbcMessageId == messageId
+                          && signal.DbcMessage.DbcFileId == fileId,
+                cancellationToken);
+
+        if (dbcSignal is null)
+        {
+            return new UpdateDbcSignalResult
+            {
+                NotFound = true
+            };
+        }
+
+        dbcSignal.Name = request.Name.Trim();
+        dbcSignal.MultiplexerIndicator = string.IsNullOrWhiteSpace(request.MultiplexerIndicator)
+            ? null
+            : request.MultiplexerIndicator.Trim();
+        dbcSignal.StartBit = request.StartBit;
+        dbcSignal.BitLength = request.BitLength;
+        dbcSignal.ByteOrder = request.ByteOrder.Trim();
+        dbcSignal.ValueType = request.ValueType.Trim();
+        dbcSignal.Factor = request.Factor;
+        dbcSignal.Offset = request.Offset;
+        dbcSignal.Minimum = request.Minimum;
+        dbcSignal.Maximum = request.Maximum;
+        dbcSignal.Unit = request.Unit.Trim();
+        dbcSignal.Comment = string.IsNullOrWhiteSpace(request.Comment)
+            ? null
+            : request.Comment.Trim();
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new UpdateDbcSignalResult
+        {
+            Signal = dbcSignal.ToResponse()
+        };
+    }
+
     private static Dictionary<string, string[]> Validate(IFormFile? file)
     {
         if (file is null)
@@ -223,4 +280,67 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
 
         return errors;
     }
+
+    private static Dictionary<string, string[]> Validate(UpdateDbcSignalRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            errors["name"] = ["The signal name is required."];
+        }
+        else if (request.Name.Trim().Length > 255)
+        {
+            errors["name"] = ["The signal name must be 255 characters or fewer."];
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.MultiplexerIndicator)
+            && request.MultiplexerIndicator.Trim().Length > 50)
+        {
+            errors["multiplexerIndicator"] = ["The mode must be 50 characters or fewer."];
+        }
+        else if (!string.IsNullOrWhiteSpace(request.MultiplexerIndicator)
+                 && !IsValidMultiplexerIndicator(request.MultiplexerIndicator.Trim()))
+        {
+            errors["multiplexerIndicator"] = ["The mode must be M or m followed by a number."];
+        }
+
+        if (request.StartBit < 0)
+        {
+            errors["startBit"] = ["The start bit must be zero or greater."];
+        }
+
+        if (request.BitLength <= 0)
+        {
+            errors["bitLength"] = ["The bit length must be greater than zero."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ByteOrder))
+        {
+            errors["byteOrder"] = ["The byte order is required."];
+        }
+        else if (request.ByteOrder.Trim() is not ("little-endian" or "big-endian"))
+        {
+            errors["byteOrder"] = ["The byte order must be either little-endian or big-endian."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ValueType))
+        {
+            errors["valueType"] = ["The value type is required."];
+        }
+        else if (request.ValueType.Trim() is not ("unsigned" or "signed" or "float" or "double"))
+        {
+            errors["valueType"] = ["The value type must be unsigned, signed, float, or double."];
+        }
+
+        if (request.Unit.Trim().Length > 100)
+        {
+            errors["unit"] = ["The unit must be 100 characters or fewer."];
+        }
+
+        return errors;
+    }
+
+    private static bool IsValidMultiplexerIndicator(string value) =>
+        value == "M" || (value.StartsWith('m') && value.Length > 1 && value[1..].All(char.IsDigit));
 }

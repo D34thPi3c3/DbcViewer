@@ -37,6 +37,7 @@ public static class DbcFileMappings
 
     public static DbcSignalResponse ToResponse(this DbcSignal signal) =>
         new(
+            signal.Id,
             signal.Name,
             signal.MultiplexerIndicator,
             signal.StartBit,

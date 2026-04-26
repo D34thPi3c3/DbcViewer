@@ -23,6 +23,7 @@ export type DbcMessageResponse = {
 }
 
 export type DbcSignalResponse = {
+  id: string
   name: string
   multiplexerIndicator: string | null
   startBit: number
