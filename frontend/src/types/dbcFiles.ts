@@ -14,6 +14,7 @@ export type DbcDefinitionResponse = {
 }
 
 export type DbcMessageResponse = {
+  id: string
   frameId: number
   name: string
   lengthInBytes: number

@@ -19,6 +19,19 @@ export async function postJsonRequest<TRequest>(
   })
 }
 
+export async function putJsonRequest<TRequest>(
+  path: string,
+  request: TRequest,
+): Promise<Response> {
+  return fetch(`${apiBaseUrl}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+}
+
 export async function postMultipartRequest(path: string, formData: FormData): Promise<Response> {
   return fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',

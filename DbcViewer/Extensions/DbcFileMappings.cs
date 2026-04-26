@@ -25,6 +25,7 @@ public static class DbcFileMappings
 
     public static DbcMessageResponse ToResponse(this DbcMessage message) =>
         new(
+            message.Id,
             checked((uint)message.FrameId),
             message.Name,
             (ushort)message.LengthInBytes,

@@ -41,11 +41,11 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
 
   return (
     <TableContainer
-      key={`${message.frameId}:${message.name}`}
+      key={message.id}
       sx={{
         maxHeight: { xs: 420, md: 520 },
         overflow: 'hidden',
-        borderRadius: 4,
+        borderRadius: '18px',
         border: '1px solid rgba(0, 105, 92, 0.12)',
         bgcolor: 'rgba(255, 255, 255, 0.72)',
       }}

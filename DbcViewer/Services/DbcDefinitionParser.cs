@@ -91,6 +91,7 @@ internal static partial class DbcDefinitionParser
 
         return messages
             .Select(message => new DbcMessageResponse(
+                Guid.Empty,
                 message.FrameId,
                 message.Name,
                 message.LengthInBytes,

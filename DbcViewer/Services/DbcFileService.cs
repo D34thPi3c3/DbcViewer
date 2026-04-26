@@ -1,4 +1,5 @@
 using DbcViewer.Data;
+using DbcViewer.Contracts.DbcFiles;
 using DbcViewer.Entities;
 using DbcViewer.Extensions;
 using DbcViewer.Services.Results;
@@ -101,6 +102,68 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         };
     }
 
+    public async Task<UpdateDbcMessageResult> UpdateMessageAsync(
+        Guid fileId,
+        Guid messageId,
+        UpdateDbcMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationErrors = Validate(request);
+        if (validationErrors.Count > 0)
+        {
+            return new UpdateDbcMessageResult
+            {
+                Errors = validationErrors
+            };
+        }
+
+        var dbcMessage = await dbContext.DbcMessages
+            .Include(message => message.Signals.OrderBy(signal => signal.SortOrder))
+            .SingleOrDefaultAsync(
+                message => message.Id == messageId && message.DbcFileId == fileId,
+                cancellationToken);
+
+        if (dbcMessage is null)
+        {
+            return new UpdateDbcMessageResult
+            {
+                NotFound = true
+            };
+        }
+
+        var normalizedName = request.Name.Trim();
+        var normalizedTransmitter = request.Transmitter.Trim();
+
+        var frameIdAlreadyAssigned = await dbContext.DbcMessages
+            .AnyAsync(
+                message => message.DbcFileId == fileId
+                           && message.Id != messageId
+                           && message.FrameId == request.FrameId,
+                cancellationToken);
+
+        if (frameIdAlreadyAssigned)
+        {
+            return new UpdateDbcMessageResult
+            {
+                Errors = new Dictionary<string, string[]>
+                {
+                    ["frameId"] = ["The CAN ID is already used by another message in this file."]
+                }
+            };
+        }
+
+        dbcMessage.FrameId = request.FrameId;
+        dbcMessage.Name = normalizedName;
+        dbcMessage.Transmitter = normalizedTransmitter;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new UpdateDbcMessageResult
+        {
+            Message = dbcMessage.ToResponse()
+        };
+    }
+
     private static Dictionary<string, string[]> Validate(IFormFile? file)
     {
         if (file is null)
@@ -129,5 +192,35 @@ public sealed class DbcFileService(AppDbContext dbContext) : IDbcFileService
         }
 
         return [];
+    }
+
+    private static Dictionary<string, string[]> Validate(UpdateDbcMessageRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (request.FrameId is < 0 or > uint.MaxValue)
+        {
+            errors["frameId"] = ["The CAN ID must be between 0 and 4294967295."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            errors["name"] = ["The message name is required."];
+        }
+        else if (request.Name.Trim().Length > 255)
+        {
+            errors["name"] = ["The message name must be 255 characters or fewer."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Transmitter))
+        {
+            errors["transmitter"] = ["The transmitter is required."];
+        }
+        else if (request.Transmitter.Trim().Length > 255)
+        {
+            errors["transmitter"] = ["The transmitter must be 255 characters or fewer."];
+        }
+
+        return errors;
     }
 }

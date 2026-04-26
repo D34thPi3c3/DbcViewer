@@ -4,6 +4,7 @@ import { Chip, Stack, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
 import type { DbcDefinitionResponse } from '../../../types/dbcFiles'
 import { DbcMessagesTable } from './DbcMessagesTable'
+import { DbcMessageEditor } from './DbcMessageEditor'
 import { DbcSignalsTable } from './DbcSignalsTable'
 import { DefinitionTableCard } from './DefinitionTableCard'
 
@@ -37,13 +38,14 @@ export function DbcDefinitionTables({ definition }: DbcDefinitionTablesProps) {
       <Stack spacing={3}>
         <DefinitionTableCard
           title="Nachrichten"
-          description="Wähle eine Nachricht aus, um die zugehörigen Signale zu sehen."
+          description="Wähle eine Nachricht aus, um Signale zu sehen und `CAN_Id`, `Name` oder `Sender` anzupassen."
         >
           <DbcMessagesTable
             messages={definition.messages}
             selectedMessageIndex={selectedMessageIndex}
             onSelectMessage={setSelectedMessageIndex}
           />
+          <DbcMessageEditor fileId={definition.fileId} message={selectedMessage} />
         </DefinitionTableCard>
 
         <DefinitionTableCard

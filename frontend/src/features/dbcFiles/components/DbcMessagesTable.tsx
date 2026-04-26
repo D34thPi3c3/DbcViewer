@@ -58,7 +58,7 @@ export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessa
         sx={{
           maxHeight: { xs: 360, md: 520 },
           overflow: 'hidden',
-          borderRadius: 4,
+          borderRadius: '18px',
           border: '1px solid rgba(0, 105, 92, 0.12)',
           bgcolor: 'rgba(255, 255, 255, 0.72)',
         }}
@@ -89,7 +89,7 @@ export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessa
 
                 return (
                   <TableRow
-                    key={`${message.frameId}:${message.name}:${index}`}
+                    key={message.id}
                     hover
                     selected={isSelected}
                     onClick={() => onSelectMessage(index)}
