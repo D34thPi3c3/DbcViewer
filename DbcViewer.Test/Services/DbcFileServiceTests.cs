@@ -1,4 +1,5 @@
 using System.Text;
+using DbcViewer.Contracts.DbcFiles;
 using DbcViewer.Data;
 using DbcViewer.Services;
 using Microsoft.AspNetCore.Http;
@@ -98,6 +99,7 @@ public sealed class DbcFileServiceTests
         Assert.Single(result.Definition.Messages);
 
         var message = result.Definition.Messages[0];
+        Assert.NotEqual(Guid.Empty, message.Id);
         Assert.Equal((uint)256, message.FrameId);
         Assert.Equal("VehicleStatus", message.Name);
         Assert.Equal((ushort)8, message.LengthInBytes);
@@ -251,6 +253,107 @@ public sealed class DbcFileServiceTests
         Assert.False(result.Succeeded);
         Assert.Contains("file", result.Errors.Keys);
         Assert.Empty(dbContext.DbcFiles);
+    }
+
+    [Fact]
+    public async Task UpdateMessageAsync_UpdatesFrameIdNameAndTransmitter()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId)
+            .Select(message => message.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.UpdateMessageAsync(
+            fileId,
+            messageId,
+            new UpdateDbcMessageRequest(512, "VehicleStatusNew", "Gateway"));
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Message);
+        Assert.Equal((uint)512, result.Message!.FrameId);
+        Assert.Equal("VehicleStatusNew", result.Message.Name);
+        Assert.Equal("Gateway", result.Message.Transmitter);
+
+        var savedMessage = await dbContext.DbcMessages.SingleAsync(message => message.Id == messageId);
+        Assert.Equal(512, savedMessage.FrameId);
+        Assert.Equal("VehicleStatusNew", savedMessage.Name);
+        Assert.Equal("Gateway", savedMessage.Transmitter);
+    }
+
+    [Fact]
+    public async Task UpdateMessageAsync_ReturnsError_WhenFrameIdAlreadyExistsInSameFile()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+
+            BO_ 300 EngineData: 8 Vector__XXX
+             SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+            """);
+        var messageId = await dbContext.DbcMessages
+            .Where(message => message.DbcFileId == fileId && message.FrameId == 256)
+            .Select(message => message.Id)
+            .SingleAsync();
+
+        // Act
+        var result = await service.UpdateMessageAsync(
+            fileId,
+            messageId,
+            new UpdateDbcMessageRequest(300, "VehicleStatus", "Gateway"));
+
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.Contains("frameId", result.Errors.Keys);
+
+        var unchangedMessage = await dbContext.DbcMessages.SingleAsync(message => message.Id == messageId);
+        Assert.Equal(256, unchangedMessage.FrameId);
+    }
+
+    [Fact]
+    public async Task UpdateMessageAsync_ReturnsNotFound_WhenMessageDoesNotExist()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var fileId = await UploadDbcContentAsync(
+            service,
+            """
+            VERSION "1.0"
+
+            BO_ 256 VehicleStatus: 8 Vector__XXX
+             SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+            """);
+
+        // Act
+        var result = await service.UpdateMessageAsync(
+            fileId,
+            Guid.NewGuid(),
+            new UpdateDbcMessageRequest(512, "VehicleStatusNew", "Gateway"));
+
+        // Assert
+        Assert.True(result.NotFound);
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Message);
     }
 
     [Fact]
