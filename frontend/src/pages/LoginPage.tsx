@@ -63,7 +63,7 @@ export function LoginPage() {
       <AppMenuBar />
 
       <Container maxWidth="lg">
-        <Grid container spacing={4} sx={{ alignItems: 'stretch', pt: { xs: 4, md: 6 } }}>
+        <Grid container spacing={4} sx={{ alignItems: 'stretch', pt: { xs: 3, md: 4 } }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={3} sx={{ height: '100%', justifyContent: 'center' }}>
               <Box>

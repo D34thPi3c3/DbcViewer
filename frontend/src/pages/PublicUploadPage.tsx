@@ -35,8 +35,8 @@ export function PublicUploadPage() {
     >
       <AppMenuBar />
 
-      <Container maxWidth="lg">
-        <Stack spacing={4} sx={{ pt: { xs: 4, md: 6 } }}>
+      <Stack spacing={4} sx={{ pt: { xs: 3, md: 4 } }}>
+        <Container maxWidth="lg">
           <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
             <Grid size={{ xs: 12 }}>
               <Stack spacing={3}>
@@ -61,15 +61,17 @@ export function PublicUploadPage() {
               </Stack>
             </Grid>
           </Grid>
+        </Container>
 
-          {uploadedFile ? (
+        {uploadedFile ? (
+          <Box sx={{ px: { xs: 2, md: 4 } }}>
             <Stack spacing={3}>
               {definitionQuery.isPending ? (
                 <Paper
                   elevation={0}
                   sx={{
                     p: 3,
-                    borderRadius: 6,
+                    borderRadius: 0,
                     border: '1px solid rgba(0, 105, 92, 0.12)',
                     bgcolor: 'rgba(255, 250, 244, 0.82)',
                   }}
@@ -82,16 +84,16 @@ export function PublicUploadPage() {
               ) : null}
 
               {definitionQuery.error ? (
-                <Alert severity="error" sx={{ borderRadius: 4 }}>
+                <Alert severity="error" sx={{ borderRadius: 0 }}>
                   {definitionQuery.error.message}
                 </Alert>
               ) : null}
 
               {definitionQuery.data ? <DbcDefinitionTables definition={definitionQuery.data} /> : null}
             </Stack>
-          ) : null}
-        </Stack>
-      </Container>
+          </Box>
+        ) : null}
+      </Stack>
     </Box>
   )
 }

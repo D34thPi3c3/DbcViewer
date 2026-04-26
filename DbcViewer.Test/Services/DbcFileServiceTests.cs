@@ -116,6 +116,7 @@ public sealed class DbcFileServiceTests
         Assert.Equal(250d, firstSignal.Maximum);
         Assert.Equal("km/h", firstSignal.Unit);
         Assert.Equal(["Vector__XXX", "Dashboard"], firstSignal.Receivers);
+        Assert.Null(firstSignal.Comment);
     }
 
     [Fact]
@@ -179,6 +180,87 @@ public sealed class DbcFileServiceTests
         Assert.True(result.NotFound);
         Assert.False(result.Succeeded);
         Assert.Null(result.Definition);
+    }
+
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsSignalComments()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var dbcContent = """
+                         VERSION "1.0"
+
+                         BO_ 256 VehicleStatus: 8 Vector__XXX
+                          SG_ VehicleSpeed : 0|16@1+ (0.1,0) [0|250] "km/h" Vector__XXX
+                          SG_ EngineSpeed : 16|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+
+                         CM_ SG_ 256 VehicleSpeed "Current vehicle speed";
+                         """;
+
+        dbContext.DbcFiles.Add(new Entities.DbcFile
+        {
+            OriginalFileName = "vehicle.dbc",
+            ContentType = "application/octet-stream",
+            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
+            Content = Encoding.UTF8.GetBytes(dbcContent),
+            UploadedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+
+        // Act
+        var result = await service.GetDefinitionAsync(fileId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Definition);
+
+        var message = Assert.Single(result.Definition!.Messages);
+        Assert.Equal("Current vehicle speed", message.Signals[0].Comment);
+        Assert.Null(message.Signals[1].Comment);
+    }
+
+    [Fact]
+    public async Task GetDefinitionAsync_ReturnsExtendedSignalValueTypes()
+    {
+        // Arrange
+        await using var dbContext = CreateDbContext();
+        var service = new DbcFileService(dbContext);
+        var dbcContent = """
+                         VERSION "1.0"
+
+                         BO_ 256 SensorData: 8 Vector__XXX
+                          SG_ Temperature : 0|32@1+ (0.1,0) [0|250] "C" Vector__XXX
+                          SG_ Pressure : 32|64@1+ (0.1,0) [0|250] "bar" Vector__XXX
+
+                         SIG_VALTYPE_ 256 Temperature : 1;
+                         SIG_VALTYPE_ 256 Pressure : 2;
+                         """;
+
+        dbContext.DbcFiles.Add(new Entities.DbcFile
+        {
+            OriginalFileName = "vehicle.dbc",
+            ContentType = "application/octet-stream",
+            SizeInBytes = Encoding.UTF8.GetByteCount(dbcContent),
+            Content = Encoding.UTF8.GetBytes(dbcContent),
+            UploadedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        var fileId = await dbContext.DbcFiles.Select(file => file.Id).SingleAsync();
+
+        // Act
+        var result = await service.GetDefinitionAsync(fileId);
+
+        // Assert
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Definition);
+
+        var message = Assert.Single(result.Definition!.Messages);
+        Assert.Equal("float", message.Signals[0].ValueType);
+        Assert.Equal("double", message.Signals[1].ValueType);
     }
 
     [Fact]

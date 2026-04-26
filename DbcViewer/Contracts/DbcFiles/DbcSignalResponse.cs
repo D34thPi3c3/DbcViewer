@@ -12,4 +12,5 @@ public sealed record DbcSignalResponse(
     double Minimum,
     double Maximum,
     string Unit,
-    IReadOnlyList<string> Receivers);
+    IReadOnlyList<string> Receivers,
+    string? Comment);

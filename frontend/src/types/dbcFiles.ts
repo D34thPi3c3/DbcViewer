@@ -34,4 +34,5 @@ export type DbcSignalResponse = {
   maximum: number
   unit: string
   receivers: string[]
+  comment: string | null
 }

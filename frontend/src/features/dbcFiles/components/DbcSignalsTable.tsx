@@ -40,16 +40,21 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
         borderRadius: 0,
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table size="small" stickyHeader sx={{ minWidth: 1360 }}>
         <TableHead>
           <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Bitbereich</TableCell>
-            <TableCell>Format</TableCell>
-            <TableCell>Skalierung</TableCell>
-            <TableCell>Wertebereich</TableCell>
+            <TableCell>Signalname</TableCell>
+            <TableCell>Mode</TableCell>
+            <TableCell>Startbit</TableCell>
+            <TableCell>Bitlänge</TableCell>
+            <TableCell>Byteorder</TableCell>
+            <TableCell>Type</TableCell>
+            <TableCell>Faktor</TableCell>
+            <TableCell>Offset</TableCell>
+            <TableCell>Min</TableCell>
+            <TableCell>Max</TableCell>
             <TableCell>Unit</TableCell>
-            <TableCell>Empfänger</TableCell>
+            <TableCell>Kommentar</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -66,19 +71,19 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
               <TableCell>
                 <Stack spacing={0.5}>
                   <Typography sx={{ fontWeight: 700 }}>{signal.name}</Typography>
-                  {signal.multiplexerIndicator ? (
-                    <Typography variant="caption" color="text.secondary">
-                      Multiplexer: {signal.multiplexerIndicator}
-                    </Typography>
-                  ) : null}
                 </Stack>
               </TableCell>
-              <TableCell>{`${signal.startBit} | ${signal.bitLength}`}</TableCell>
-              <TableCell>{`${signal.byteOrder}, ${signal.valueType}`}</TableCell>
-              <TableCell>{`${formatNumber(signal.factor)} / ${formatNumber(signal.offset)}`}</TableCell>
-              <TableCell>{`${formatNumber(signal.minimum)} bis ${formatNumber(signal.maximum)}`}</TableCell>
+              <TableCell>{formatSignalMode(signal.multiplexerIndicator)}</TableCell>
+              <TableCell>{signal.startBit}</TableCell>
+              <TableCell>{signal.bitLength}</TableCell>
+              <TableCell>{signal.byteOrder}</TableCell>
+              <TableCell>{signal.valueType}</TableCell>
+              <TableCell>{formatNumber(signal.factor)}</TableCell>
+              <TableCell>{formatNumber(signal.offset)}</TableCell>
+              <TableCell>{formatNumber(signal.minimum)}</TableCell>
+              <TableCell>{formatNumber(signal.maximum)}</TableCell>
               <TableCell>{signal.unit || '—'}</TableCell>
-              <TableCell>{signal.receivers.length > 0 ? signal.receivers.join(', ') : '—'}</TableCell>
+              <TableCell sx={{ minWidth: 240, whiteSpace: 'normal' }}>{signal.comment || '—'}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -89,4 +94,20 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? value.toString() : value.toString()
+}
+
+function formatSignalMode(multiplexerIndicator: string | null) {
+  if (!multiplexerIndicator) {
+    return 'Einzelsignal'
+  }
+
+  if (multiplexerIndicator === 'M') {
+    return 'Multiplexer'
+  }
+
+  if (multiplexerIndicator.startsWith('m')) {
+    return `Multiplexerwert ${multiplexerIndicator.slice(1)}`
+  }
+
+  return multiplexerIndicator
 }
