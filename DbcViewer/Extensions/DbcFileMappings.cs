@@ -25,7 +25,7 @@ public static class DbcFileMappings
 
     public static DbcMessageResponse ToResponse(this DbcMessage message) =>
         new(
-            (uint)message.FrameId,
+            checked((uint)message.FrameId),
             message.Name,
             (ushort)message.LengthInBytes,
             message.Transmitter,
@@ -57,7 +57,7 @@ public static class DbcFileMappings
             .Select((message, messageIndex) => new DbcMessage
             {
                 DbcFileId = dbcFileId,
-                FrameId = checked((int)message.FrameId),
+                FrameId = message.FrameId,
                 Name = message.Name,
                 LengthInBytes = checked((short)message.LengthInBytes),
                 Transmitter = message.Transmitter,

@@ -44,11 +44,23 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
       key={`${message.frameId}:${message.name}`}
       sx={{
         maxHeight: { xs: 420, md: 520 },
-        overflow: 'auto',
-        borderRadius: 0,
+        overflow: 'hidden',
+        borderRadius: 4,
+        border: '1px solid rgba(0, 105, 92, 0.12)',
+        bgcolor: 'rgba(255, 255, 255, 0.72)',
       }}
     >
-      <Table size="small" stickyHeader sx={{ minWidth: 1360 }}>
+      <Table
+        size="small"
+        stickyHeader
+        sx={{
+          minWidth: 1360,
+          '& .MuiTableCell-head': {
+            bgcolor: 'rgba(244, 239, 230, 0.96)',
+            fontWeight: 700,
+          },
+        }}
+      >
         <TableHead>
           <TableRow>
             <TableCell>Signalname</TableCell>
@@ -70,6 +82,9 @@ export function DbcSignalsTable({ message }: DbcSignalsTableProps) {
             <TableRow
               key={`${message.frameId}:${message.name}:${signal.name}:${signal.startBit}:${index}`}
               sx={{
+                '&:last-child .MuiTableCell-root': {
+                  borderBottom: 'none',
+                },
                 '& .MuiTableCell-root': {
                   borderColor: 'rgba(0, 105, 92, 0.08)',
                   verticalAlign: 'top',

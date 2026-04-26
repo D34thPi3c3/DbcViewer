@@ -57,11 +57,22 @@ export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessa
       <TableContainer
         sx={{
           maxHeight: { xs: 360, md: 520 },
-          overflow: 'auto',
-          borderRadius: 0,
+          overflow: 'hidden',
+          borderRadius: 4,
+          border: '1px solid rgba(0, 105, 92, 0.12)',
+          bgcolor: 'rgba(255, 255, 255, 0.72)',
         }}
       >
-        <Table size="small" stickyHeader>
+        <Table
+          size="small"
+          stickyHeader
+          sx={{
+            '& .MuiTableCell-head': {
+              bgcolor: 'rgba(244, 239, 230, 0.96)',
+              fontWeight: 700,
+            },
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
@@ -84,6 +95,10 @@ export function DbcMessagesTable({ messages, selectedMessageIndex, onSelectMessa
                     onClick={() => onSelectMessage(index)}
                     sx={{
                       cursor: 'pointer',
+                      transition: 'background-color 160ms ease',
+                      '&:last-child .MuiTableCell-root': {
+                        borderBottom: 'none',
+                      },
                       '& .MuiTableCell-root': {
                         borderColor: 'rgba(0, 105, 92, 0.08)',
                       },

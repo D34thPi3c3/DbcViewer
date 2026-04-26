@@ -41,7 +41,7 @@ public static class WebApplicationExtensions
             CREATE TABLE IF NOT EXISTS dbc_messages (
                 "Id" uuid PRIMARY KEY,
                 "DbcFileId" uuid NOT NULL REFERENCES dbc_files("Id") ON DELETE CASCADE,
-                "FrameId" integer NOT NULL,
+                "FrameId" bigint NOT NULL,
                 "Name" character varying(255) NOT NULL,
                 "LengthInBytes" smallint NOT NULL,
                 "Transmitter" character varying(255) NOT NULL,
@@ -72,6 +72,9 @@ public static class WebApplicationExtensions
 
             CREATE INDEX IF NOT EXISTS "IX_dbc_signals_DbcMessageId_Name"
                 ON dbc_signals ("DbcMessageId", "Name");
+
+            ALTER TABLE dbc_messages
+                ALTER COLUMN "FrameId" TYPE bigint;
             """);
     }
 }
